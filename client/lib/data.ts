@@ -149,17 +149,35 @@ export async function uploadFile(
   formData.append("file", file);
   formData.append("documentId", documentId);
 
-  const response = await fetch("http://localhost:5000/api/upload", {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error || "Upload failed");
+  let response: Response;
+  try {
+    response = await fetch("http://localhost:5000/api/upload", {
+      method: "POST",
+      body: formData,
+    });
+  } catch {
+    throw new Error("Cannot connect to backend. Make sure the backend server is running on port 5000.");
   }
 
-  const { url } = await response.json();
+  if (!response.ok) {
+    let errMsg = `Upload failed (HTTP ${response.status})`;
+    try {
+      const err = await response.json();
+      errMsg = err.error || errMsg;
+    } catch {
+      // response was not JSON
+    }
+    throw new Error(errMsg);
+  }
+
+  let data: any;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error("Backend returned an invalid response. Check if the backend is running correctly on port 5000.");
+  }
+
+  const { url } = data;
 
   await addDocumentFile(documentId, file.name, uploadedBy, url);
   await addAuditLog(documentId, "File Uploaded", uploadedBy, file.name);
