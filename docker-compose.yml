@@ -1,0 +1,58 @@
+version: "3.8"
+
+services:
+  mpdo-database:
+    image: postgres:15-alpine
+    container_name: mpdo-database
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: mpdo_alubijid
+      POSTGRES_USER: mpdo_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - mpdo_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mpdo_user -d mpdo_alubijid"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mpdo-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mpdo-backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      PORT: 5000
+      DATABASE_URL: ${DATABASE_URL}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REFRESH_TOKEN: ${GOOGLE_REFRESH_TOKEN}
+      GOOGLE_DRIVE_FOLDER_ID: ${GOOGLE_DRIVE_FOLDER_ID}
+    depends_on:
+      mpdo-database:
+        condition: service_healthy
+
+  mpdo-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_API_URL: ${VITE_API_URL}
+    container_name: mpdo-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - mpdo-backend
+
+volumes:
+  mpdo_db_data:
