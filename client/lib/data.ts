@@ -9,14 +9,23 @@ export async function getEmployees(): Promise<Employee[]> {
   return data ?? [];
 }
 
-export async function addEmployee(employee: Omit<Employee, "id">): Promise<Employee> {
-  const { data, error } = await supabase.from("employees").insert(employee).select().single();
+export async function addEmployee(
+  employee: Omit<Employee, "id">,
+): Promise<Employee> {
+  const { data, error } = await supabase
+    .from("employees")
+    .insert(employee)
+    .select()
+    .single();
   if (error) throw error;
   return data;
 }
 
 export async function updateEmployeeRole(id: string, role: "admin" | "staff") {
-  const { error } = await supabase.from("employees").update({ role }).eq("id", id);
+  const { error } = await supabase
+    .from("employees")
+    .update({ role })
+    .eq("id", id);
   if (error) throw error;
 }
 
@@ -68,7 +77,7 @@ export async function getDocuments(): Promise<Document[]> {
           details: l.details,
         })),
       };
-    })
+    }),
   );
 
   return documents;
@@ -78,7 +87,7 @@ export async function createDocument(
   doc: Omit<Document, "files" | "history">,
   routingActions: RoutingAction[],
   routingRemarks: string,
-  createdBy: string
+  createdBy: string,
 ): Promise<void> {
   const now = new Date().toISOString();
   const dtn = `DTN-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
@@ -104,19 +113,27 @@ export async function createDocument(
   await addAuditLog(dtn, "Received", createdBy);
 }
 
-export async function updateDocument(id: string, fields: Partial<{
-  status: string;
-  assignedTo: string;
-  source: string;
-  destination: string;
-}>) {
-  const mapped: Record<string, unknown> = { updated_at: new Date().toISOString() };
+export async function updateDocument(
+  id: string,
+  fields: Partial<{
+    status: string;
+    assignedTo: string;
+    source: string;
+    destination: string;
+  }>,
+) {
+  const mapped: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
   if (fields.status) mapped.status = fields.status;
   if (fields.assignedTo) mapped.assigned_to = fields.assignedTo;
   if (fields.source) mapped.source = fields.source;
   if (fields.destination !== undefined) mapped.destination = fields.destination;
 
-  const { error } = await supabase.from("documents").update(mapped).eq("id", id);
+  const { error } = await supabase
+    .from("documents")
+    .update(mapped)
+    .eq("id", id);
   if (error) throw error;
 }
 
@@ -129,7 +146,7 @@ export async function addDocumentFile(
   documentId: string,
   fileName: string,
   uploadedBy: string,
-  url = "#"
+  url = "#",
 ) {
   const { error } = await supabase.from("document_files").insert({
     document_id: documentId,
@@ -143,7 +160,7 @@ export async function addDocumentFile(
 export async function uploadFile(
   documentId: string,
   file: File,
-  uploadedBy: string
+  uploadedBy: string,
 ): Promise<string> {
   const formData = new FormData();
   formData.append("file", file);
@@ -189,7 +206,7 @@ export async function addAuditLog(
   documentId: string,
   action: string,
   byUser: string,
-  details?: string
+  details?: string,
 ) {
   const { error } = await supabase.from("audit_logs").insert({
     document_id: documentId,
@@ -222,4 +239,104 @@ export const routingActionOptions: RoutingAction[] = [
   "For your file",
   "Please read and return",
   "For information/reference",
+];
+
+// DUMMY DATA (FOR TESTING PURPOSES ONLY)
+export const mockDocuments: Document[] = [
+  {
+    id: "DTN-2026-001",
+    title: "Infrastructure Development Proposal",
+    type: "Infrastructure",
+    documentType: "Assigned",
+    status: "Processing",
+    submittedDate: "2026-02-15",
+    timestamp: "2026-02-15 09:30:00",
+    assignedTo: "sandy@alubijid.gov.ph",
+    deadline: "2026-02-28",
+    source: "Mayor's Office",
+    files: [],
+    history: [
+      { action: "Received", date: "2026-02-15 09:30:00", by: "Admin" },
+      { action: "Assigned", date: "2026-02-15 10:00:00", by: "Admin" },
+      { action: "Opened", date: "2026-02-16 08:00:00", by: "Sandy Lumacad" },
+    ],
+    routingSlip: {
+      actions: ["For approval/signature", "For review/comments/recom"],
+      remarks:
+        "Please review and provide recommendations on the proposed infrastructure layout.",
+    },
+    createdAt: "2026-02-15 09:30:00",
+    updatedAt: "2026-02-16 08:00:00",
+  },
+  {
+    id: "DTN-2026-002",
+    title: "Land Use Classification Study",
+    type: "Planning",
+    documentType: "Processed",
+    status: "Approved",
+    submittedDate: "2026-02-10",
+    timestamp: "2026-02-10 14:15:00",
+    assignedTo: "gis@alubijid.gov.ph",
+    deadline: "2026-02-25",
+    source: "National Agency",
+    files: [],
+    history: [
+      { action: "Received", date: "2026-02-10 14:15:00", by: "Admin" },
+      { action: "Assigned", date: "2026-02-10 14:45:00", by: "Admin" },
+      { action: "Processed", date: "2026-02-18 11:00:00", by: "GIS Team" },
+      { action: "Approved", date: "2026-02-20 16:30:00", by: "Administrator" },
+    ],
+    routingSlip: {
+      actions: ["For approval/signature", "For your file"],
+      remarks: "Complete the land use study and submit final report.",
+    },
+    createdAt: "2026-02-10 14:15:00",
+    updatedAt: "2026-02-20 16:30:00",
+  },
+  {
+    id: "DTN-2026-003",
+    title: "Community Development Request",
+    type: "Development",
+    documentType: "Received",
+    status: "Pending",
+    submittedDate: "2026-02-20",
+    timestamp: "2026-02-20 10:45:00",
+    assignedTo: "tech@alubijid.gov.ph",
+    deadline: "2026-03-05",
+    source: "Public Applicant",
+    files: [],
+    history: [{ action: "Received", date: "2026-02-20 10:45:00", by: "Admin" }],
+    routingSlip: {
+      actions: ["For review/comments/recom", "Please draft reply"],
+      remarks:
+        "Review the proposal and prepare a reply for the public applicant.",
+    },
+    createdAt: "2026-02-20 10:45:00",
+    updatedAt: "2026-02-20 10:45:00",
+  },
+  {
+    id: "DTN-2026-004",
+    title: "Environmental Impact Assessment",
+    type: "Environmental",
+    documentType: "Opened",
+    status: "Overdue",
+    submittedDate: "2026-02-01",
+    timestamp: "2026-02-01 11:00:00",
+    assignedTo: "sandy@alubijid.gov.ph",
+    deadline: "2026-02-18",
+    source: "LGU Office",
+    destination: "Mayor's Office",
+    files: [],
+    history: [
+      { action: "Received", date: "2026-02-01 11:00:00", by: "Admin" },
+      { action: "Assigned", date: "2026-02-01 11:30:00", by: "Admin" },
+    ],
+    routingSlip: {
+      actions: ["For compliance", "For information/reference"],
+      remarks:
+        "Ensure compliance with environmental regulations and standards.",
+    },
+    createdAt: "2026-02-01 11:00:00",
+    updatedAt: "2026-02-01 11:30:00",
+  },
 ];

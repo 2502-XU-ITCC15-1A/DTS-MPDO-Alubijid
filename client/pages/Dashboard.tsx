@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
+import DocumentWizard from "@/components/DocumentWizard";
 import { Button } from "@/components/ui/button";
 import {
   getDocuments,
@@ -1120,249 +1121,51 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Upload Modal */}
+      {/* Document Wizard Modal */}
       {showUploadModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-          onClick={() => setShowUploadModal(false)}
-        >
-          <div
-            className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sticky top-0 bg-gradient-to-r from-primary to-secondary text-white p-6 flex justify-between items-center">
-              <h3 className="text-2xl font-bold">Upload New Document</h3>
-              <button
-                onClick={() => {
-                  setShowUploadModal(false);
-                  setUploadFormData({ title: "", documentType: "", source: "", assignedTo: "", deadline: "" });
-                  setSelectedRoutingActions([]);
-                  setRoutingRemarks("");
-                }}
-                className="text-white/80 hover:text-white text-2xl"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-6 space-y-5">
-              {/* Document Information */}
-              <div className="border-b pb-5">
-                <h4 className="font-semibold text-gray-900 mb-4">Document Information</h4>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                      Document Title
-                    </label>
-                    <input
-                      type="text"
-                      value={uploadFormData.title}
-                      onChange={(e) => setUploadFormData({ ...uploadFormData, title: e.target.value })}
-                      placeholder="Enter document title"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                      Document Type
-                    </label>
-                    <select
-                      value={uploadFormData.documentType}
-                      onChange={(e) => setUploadFormData({ ...uploadFormData, documentType: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
-                    >
-                      <option value="">Select Type</option>
-                      <option value="Infrastructure">Infrastructure</option>
-                      <option value="Planning">Planning</option>
-                      <option value="Development">Development</option>
-                      <option value="Environmental">Environmental</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                      Source
-                    </label>
-                    <select
-                      value={uploadFormData.source}
-                      onChange={(e) => setUploadFormData({ ...uploadFormData, source: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
-                    >
-                      <option value="">Select Source</option>
-                      {locations.map((loc) => (
-                        <option key={loc} value={loc}>
-                          {loc}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                      Deadline
-                    </label>
-                    <input
-                      type="date"
-                      value={uploadFormData.deadline}
-                      onChange={(e) => setUploadFormData({ ...uploadFormData, deadline: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Assign to Staff */}
-              <div className="border-b pb-5">
-                <h4 className="font-semibold text-gray-900 mb-4">Assign Document</h4>
-                <select
-                  value={uploadFormData.assignedTo}
-                  onChange={(e) => setUploadFormData({ ...uploadFormData, assignedTo: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
-                >
-                  <option value="">Select Staff Member</option>
-                  {employees
-                    .filter((e) => e.role === "staff")
-                    .map((employee) => (
-                      <option key={employee.id} value={employee.email}>
-                        {employee.name} | {employee.department}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              {/* Routing Slip */}
-              <div className="border-b pb-5">
-                <h4 className="font-semibold text-gray-900 mb-4">Routing Slip Actions</h4>
-                <p className="text-sm text-gray-600 mb-3">Select actions for the assigned staff member:</p>
-                <div className="space-y-2">
-                  {routingActionOptions.map((action) => (
-                    <label key={action} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedRoutingActions.includes(action)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedRoutingActions([...selectedRoutingActions, action]);
-                          } else {
-                            setSelectedRoutingActions(selectedRoutingActions.filter((a) => a !== action));
-                          }
-                        }}
-                        className="rounded border-gray-300"
-                      />
-                      <span className="text-sm text-gray-700">{action}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Remarks */}
-              <div className="border-b pb-5">
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Remarks / Instructions
-                </label>
-                <textarea
-                  value={routingRemarks}
-                  onChange={(e) => setRoutingRemarks(e.target.value)}
-                  placeholder="Add any instructions or remarks for the assigned staff member..."
-                  rows={4}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-                />
-              </div>
-
-              {/* File Upload */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Upload File
-                </label>
-                <input
-                  ref={uploadModalFileInputRef}
-                  type="file"
-                  className="hidden"
-                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-                  onChange={(e) => setUploadModalFile(e.target.files?.[0] ?? null)}
-                />
-                <div
-                  className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary transition cursor-pointer"
-                  onClick={() => uploadModalFileInputRef.current?.click()}
-                >
-                  <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                  {uploadModalFile ? (
-                    <p className="text-primary font-medium">{uploadModalFile.name}</p>
-                  ) : (
-                    <p className="text-gray-600">
-                      Drag and drop your file here or{" "}
-                      <span className="text-primary font-medium">click to browse</span>
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-4 border-t">
-                <Button
-                  onClick={() => {
-                    setShowUploadModal(false);
-                    setUploadFormData({ title: "", documentType: "", source: "", assignedTo: "", deadline: "" });
-                    setSelectedRoutingActions([]);
-                    setRoutingRemarks("");
-                  }}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={async () => {
-                    if (!uploadFormData.title || !uploadFormData.source || !uploadFormData.assignedTo || !uploadFormData.deadline) return;
-                    try {
-                      await createDocument(
-                        {
-                          id: "",
-                          title: uploadFormData.title,
-                          type: uploadFormData.documentType || "General",
-                          documentType: "Received",
-                          status: "Pending",
-                          submittedDate: new Date().toISOString().split("T")[0],
-                          timestamp: new Date().toLocaleString(),
-                          assignedTo: uploadFormData.assignedTo,
-                          deadline: uploadFormData.deadline,
-                          source: uploadFormData.source,
-                          createdAt: new Date().toISOString(),
-                          updatedAt: new Date().toISOString(),
-                        },
-                        selectedRoutingActions,
-                        routingRemarks,
-                        user?.name || "Admin"
-                      );
-                      const updated = await getDocuments();
-                      setDocuments(updated);
-                      // Upload file if one was selected
-                      if (uploadModalFile && updated.length > 0) {
-                        const newest = updated[updated.length - 1];
-                        await uploadFile(newest.id, uploadModalFile, user?.name || "Admin");
-                        const withFile = await getDocuments();
-                        setDocuments(withFile);
-                      }
-                    } catch (err) {
-                      console.error("Failed to upload document:", err);
-                    }
-                    setShowUploadModal(false);
-                    setUploadFormData({ title: "", documentType: "", source: "", assignedTo: "", deadline: "" });
-                    setSelectedRoutingActions([]);
-                    setRoutingRemarks("");
-                    setUploadModalFile(null);
-                    if (uploadModalFileInputRef.current) uploadModalFileInputRef.current.value = "";
-                  }}
-                  className="flex-1 bg-primary hover:bg-primary/90 text-white flex gap-2 justify-center"
-                >
-                  <Plus className="w-4 h-4" />
-                  Upload Document
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <DocumentWizard
+          onClose={() => {
+            setShowUploadModal(false);
+            setUploadFormData({ title: "", documentType: "", source: "", assignedTo: "", deadline: "" });
+            setSelectedRoutingActions([]);
+            setRoutingRemarks("");
+          }}
+          onSubmit={async (wizardData) => {
+            // Create new document
+            try {
+              await createDocument(
+                {
+                  id: "",
+                  title: wizardData.title,
+                  type: wizardData.documentType,
+                  documentType: "Assigned",
+                  status: "Pending",
+                  submittedDate: new Date().toISOString().split("T")[0],
+                  timestamp: new Date().toLocaleString(),
+                  assignedTo: wizardData.assignedTo,
+                  deadline: wizardData.deadline,
+                  source: wizardData.source,
+                  // Set destination only for outgoing documents
+                  ...(wizardData.documentDirection === "Outgoing" && { destination: "LGU Office" }),
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                },
+                wizardData.routingActions,
+                wizardData.routingRemarks,
+                user?.name || "Admin"
+              );
+              // Refresh documents list
+              const updated = await getDocuments();
+              setDocuments(updated);
+            } catch (err) {
+              console.error("Failed to create document:", err);
+            }
+            setShowUploadModal(false);
+            setUploadFormData({ title: "", documentType: "", source: "", assignedTo: "", deadline: "" });
+            setSelectedRoutingActions([]);
+            setRoutingRemarks("");
+          }}
+        />
       )}
     </div>
   );
