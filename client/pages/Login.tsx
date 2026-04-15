@@ -37,7 +37,7 @@ export default function Login() {
             <div className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
               <FileText className="w-7 h-7 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-primary">MPDO Tracker</h1>
+            <h1 className="text-2xl font-bold text-primary">Documents Tracking System</h1>
           </div>
           <p className="text-gray-600">Municipal Planning and Development Office</p>
         </div>
