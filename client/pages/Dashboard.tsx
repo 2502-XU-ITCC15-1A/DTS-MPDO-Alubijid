@@ -80,6 +80,13 @@ export default function Dashboard() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadModalFileInputRef = useRef<HTMLInputElement>(null);
+  const [editForm, setEditForm] = useState({
+    source: "",
+    assignedTo: "",
+    status: "",
+    deadline: "",
+    destination: "",
+  });
   const [newEmployeeData, setNewEmployeeData] = useState({
     name: "",
     unit: "MPDC",
@@ -115,6 +122,28 @@ export default function Dashboard() {
   const handleLogout = () => {
     logout();
     window.location.href = "/login";
+  };
+
+  const handleSaveEdits = async () => {
+    if (!selectedDoc) return;
+
+    const updatedDoc = {
+      ...selectedDoc,
+      ...editForm,
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      // Update local state
+      setDocuments((prev) =>
+        prev.map((doc) => (doc.id === selectedDoc.id ? updatedDoc : doc))
+      );
+
+      setSelectedDoc(updatedDoc);
+      setDocViewMode("view");
+    } catch (err) {
+      console.error("Failed to save edits:", err);
+    }
   };
 
   // Filter documents based on tab and role
@@ -479,7 +508,16 @@ export default function Dashboard() {
                             ? "#10b981"
                             : "#3b82f6",
                     }}
-                    onClick={() => setSelectedDoc(doc)}
+                    onClick={() => {
+                      setSelectedDoc(doc);
+                      setEditForm({
+                        source: doc.source || "",
+                        assignedTo: doc.assignedTo || "",
+                        status: doc.status || "",
+                        deadline: doc.deadline || "",
+                        destination: doc.destination || "",
+                      });
+                    }}
                   >
                     <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
@@ -622,6 +660,21 @@ export default function Dashboard() {
                       >
                         <Edit className="w-5 h-5" />
                       </button>
+
+                      {/* SAVE BUTTON */}
+                      {docViewMode === "edit" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSaveEdits();
+                          }}
+                          className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-100 rounded transition"
+                          title="Save"
+                        >
+                          <CheckCircle className="w-5 h-5" />
+                        </button>
+                      )}
+
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -663,8 +716,8 @@ export default function Dashboard() {
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <select
                       className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
-                      value={selectedSource || ""}
-                      onChange={(e) => setSelectedSource(e.target.value)}
+                      value={editForm.source || ""}
+                      onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
                     >
                       {locations.map((loc) => (
                         <option key={loc} value={loc}>
@@ -679,7 +732,11 @@ export default function Dashboard() {
                 <div>
                   <p className="text-xs text-gray-500 uppercase font-semibold">Assigned To</p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
-                    <select className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full">
+                    <select
+                      className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
+                      value={editForm.assignedTo || ""}
+                      onChange={(e) => setEditForm({ ...editForm, assignedTo: e.target.value })}
+                    >
                       {employees
                         .filter((e) => e.role === "staff")
                         .map((employee) => (
@@ -696,16 +753,29 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 uppercase font-semibold">Deadline</p>
-                  <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.deadline}</p>
+                  {user?.role === "admin" && docViewMode === "edit" ? (
+                    <input
+                      type="date"
+                      className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
+                      value={editForm.deadline || ""}
+                      onChange={(e) => setEditForm({ ...editForm, deadline: e.target.value })}
+                    />
+                  ) : (
+                    <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.deadline}</p>
+                  )}
                 </div>
               </div>
 
               {/* Destination field - only for outgoing documents (LGU Office source) */}
-              {(selectedSource === "LGU Office" || selectedDoc.destination) && (
+              {(editForm.source === "LGU Office" || selectedDoc.destination) && (
                 <div>
                   <p className="text-xs text-gray-500 uppercase font-semibold">Destination</p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
-                    <select className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full">
+                    <select
+                      className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
+                      value={editForm.destination || ""}
+                      onChange={(e) => setEditForm({ ...editForm, destination: e.target.value })}
+                    >
                       {locations.map((loc) => (
                         <option key={loc} value={loc}>
                           {loc}
@@ -723,8 +793,9 @@ export default function Dashboard() {
                 <p className="text-xs text-gray-500 uppercase font-semibold mb-2">Status</p>
                 {docViewMode === "edit" ? (
                   <select
-                    defaultValue={selectedDoc.status}
+                    value={editForm.status || ""}
                     onChange={(e) => {
+                      setEditForm({ ...editForm, status: e.target.value });
                       if (e.target.value === "Approved") {
                         setShowApprovalWorkflow(true);
                       }
