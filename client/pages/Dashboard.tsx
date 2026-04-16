@@ -316,7 +316,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Efficiency Metrics */}
+        {/* Efficiency Metrics
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-8">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Efficiency Monitoring</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -333,7 +333,7 @@ export default function Dashboard() {
               <p className="text-2xl font-bold text-green-600 mt-2">87.3%</p>
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Document Management */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
