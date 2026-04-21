@@ -2,12 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import DocumentWizard from "@/components/DocumentWizard";
 import { Button } from "@/components/ui/button";
-import { QRCodeSVG } from "qrcode.react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   getDocuments,
   getEmployees,
   addEmployee,
   updateEmployeeRole,
+  updateDocument,
   createDocument,
   deleteDocument,
   addAuditLog,
@@ -41,6 +42,23 @@ const statusColors = {
   Released: { bg: "bg-green-50", border: "border-green-200", text: "text-green-700", icon: CheckCircle },
   Overdue: { bg: "bg-red-50", border: "border-red-200", text: "text-red-700", icon: AlertCircle },
 };
+
+const statusOptions = [
+  { value: "Pending", label: "Pending", icon: AlertCircle, text: "text-yellow-700" },
+  { value: "Processing", label: "Processing", icon: HourglassIcon, text: "text-blue-700" },
+  { value: "Approved", label: "Completed", icon: CheckCircle, text: "text-green-700" },
+  { value: "Overdue", label: "Overdue", icon: AlertCircle, text: "text-red-700" },
+] as const;
+
+const getStatusDetails = (status: string) => {
+  if (status === "Approved" || status === "Released") {
+    return statusOptions[2];
+  }
+  return statusOptions.find((option) => option.value === status) ?? statusOptions[0];
+};
+
+const getStatusValue = (status: Document["status"]) =>
+  status === "Released" ? "Approved" : status;
 
 const documentTypeFilters: DocumentType[] = ["Received", "Assigned", "Opened", "Processed", "Approved", "Released"];
 
@@ -82,6 +100,19 @@ export default function Dashboard() {
   const [showQrModal, setShowQrModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadModalFileInputRef = useRef<HTMLInputElement>(null);
+  const [editForm, setEditForm] = useState<{
+    source: string;
+    assignedTo: string;
+    status: Document["status"] | "";
+    deadline: string;
+    destination: string;
+  }>({
+    source: "",
+    assignedTo: "",
+    status: "",
+    deadline: "",
+    destination: "",
+  });
   const [newEmployeeData, setNewEmployeeData] = useState({
     name: "",
     unit: "MPDC",
@@ -117,6 +148,45 @@ export default function Dashboard() {
   const handleLogout = () => {
     logout();
     window.location.href = "/login";
+  };
+
+  const handleSaveEdits = async () => {
+    if (!selectedDoc) return;
+
+    const updatedDoc = {
+      ...selectedDoc,
+      ...editForm,
+      status: editForm.status || selectedDoc.status,
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      // Update local state
+      setDocuments((prev) =>
+        prev.map((doc) => (doc.id === selectedDoc.id ? updatedDoc : doc))
+      );
+
+      setSelectedDoc(updatedDoc);
+      setDocViewMode("view");
+    } catch (err) {
+      console.error("Failed to save edits:", err);
+    }
+  };
+
+  const handleDocStatusChange = async (docId: string, value: Document["status"]) => {
+    try {
+      await updateDocument(docId, { status: value });
+      setDocuments((prev) =>
+        prev.map((doc) =>
+          doc.id === docId ? { ...doc, status: value, updatedAt: new Date().toISOString() } : doc
+        )
+      );
+      if (selectedDoc?.id === docId) {
+        setSelectedDoc({ ...selectedDoc, status: value });
+      }
+    } catch (err) {
+      console.error("Failed to update status:", err);
+    }
   };
 
   // Filter documents based on tab and role
@@ -481,7 +551,16 @@ export default function Dashboard() {
                             ? "#10b981"
                             : "#3b82f6",
                     }}
-                    onClick={() => setSelectedDoc(doc)}
+                    onClick={() => {
+                      setSelectedDoc(doc);
+                      setEditForm({
+                        source: doc.source || "",
+                        assignedTo: doc.assignedTo || "",
+                        status: doc.status || "",
+                        deadline: doc.deadline || "",
+                        destination: doc.destination || "",
+                      });
+                    }}
                   >
                     <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
@@ -512,10 +591,31 @@ export default function Dashboard() {
                       </div>
 
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <div className={`${statusColor.bg} ${statusColor.border} border rounded-full px-3 py-1 flex items-center gap-2 whitespace-nowrap`}>
+                        <Select
+                        value={getStatusValue(doc.status)}
+                        onValueChange={(value) => handleDocStatusChange(doc.id, value as Document["status"])}
+                      >
+                        <SelectTrigger
+                          onClick={(e) => e.stopPropagation()}
+                          className={`rounded-full border ${statusColor.border} bg-white text-left px-3 py-1.5 h-9 inline-flex items-center gap-2 w-fit min-w-[10rem]`}
+                        >
                           <StatusIcon className={`w-4 h-4 ${statusColor.text}`} />
-                          <span className={`text-sm font-medium ${statusColor.text}`}>{doc.status}</span>
-                        </div>
+                          <span className={`text-sm font-medium ${statusColor.text}`}>{getStatusDetails(doc.status).label}</span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {statusOptions.map((option) => {
+                            const OptionIcon = option.icon;
+                            return (
+                              <SelectItem key={option.value} value={option.value}>
+                                <div className="flex items-center gap-2">
+                                  <OptionIcon className={`w-4 h-4 ${option.text}`} />
+                                  <span>{option.label}</span>
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
                         {/* Document Actions Menu - admin only */}
                         {user?.role === "admin" && (
                           <div className="relative">
@@ -624,6 +724,21 @@ export default function Dashboard() {
                       >
                         <Edit className="w-5 h-5" />
                       </button>
+
+                      {/* SAVE BUTTON */}
+                      {docViewMode === "edit" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSaveEdits();
+                          }}
+                          className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-100 rounded transition"
+                          title="Save"
+                        >
+                          <CheckCircle className="w-5 h-5" />
+                        </button>
+                      )}
+
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -665,8 +780,8 @@ export default function Dashboard() {
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <select
                       className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
-                      value={selectedSource || ""}
-                      onChange={(e) => setSelectedSource(e.target.value)}
+                      value={editForm.source || ""}
+                      onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
                     >
                       {locations.map((loc) => (
                         <option key={loc} value={loc}>
@@ -697,7 +812,11 @@ export default function Dashboard() {
                 <div>
                   <p className="text-xs text-gray-500 uppercase font-semibold">Assigned To</p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
-                    <select className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full">
+                    <select
+                      className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
+                      value={editForm.assignedTo || ""}
+                      onChange={(e) => setEditForm({ ...editForm, assignedTo: e.target.value })}
+                    >
                       {employees
                         .filter((e) => e.role === "staff")
                         .map((employee) => (
@@ -714,16 +833,29 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 uppercase font-semibold">Deadline</p>
-                  <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.deadline}</p>
+                  {user?.role === "admin" && docViewMode === "edit" ? (
+                    <input
+                      type="date"
+                      className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
+                      value={editForm.deadline || ""}
+                      onChange={(e) => setEditForm({ ...editForm, deadline: e.target.value })}
+                    />
+                  ) : (
+                    <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.deadline}</p>
+                  )}
                 </div>
               </div>
 
               {/* Destination field - only for outgoing documents (LGU Office source) */}
-              {(selectedSource === "LGU Office" || selectedDoc.destination) && (
+              {(editForm.source === "LGU Office" || selectedDoc.destination) && (
                 <div>
                   <p className="text-xs text-gray-500 uppercase font-semibold">Destination</p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
-                    <select className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full">
+                    <select
+                      className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
+                      value={editForm.destination || ""}
+                      onChange={(e) => setEditForm({ ...editForm, destination: e.target.value })}
+                    >
                       {locations.map((loc) => (
                         <option key={loc} value={loc}>
                           {loc}
@@ -740,23 +872,61 @@ export default function Dashboard() {
               <div>
                 <p className="text-xs text-gray-500 uppercase font-semibold mb-2">Status</p>
                 {docViewMode === "edit" ? (
-                  <select
-                    defaultValue={selectedDoc.status}
-                    onChange={(e) => {
-                      if (e.target.value === "Approved") {
+                  <Select
+                    value={editForm.status || ""}
+                    onValueChange={(value) => {
+                      setEditForm({ ...editForm, status: value as Document["status"] });
+                      if (value === "Approved") {
                         setShowApprovalWorkflow(true);
                       }
                     }}
-                    className="px-3 py-2 border border-gray-300 rounded-lg font-medium w-full"
                   >
-                    <option value="Pending">Pending</option>
-                    <option value="Processing">Processing</option>
-                    <option value="Approved">Approved</option>
-                    <option value="Released">Released</option>
-                    <option value="Overdue">Overdue</option>
-                  </select>
+                    <SelectTrigger>
+                      {editForm.status ? (
+                        <div className="flex items-center gap-2">
+                          {(() => {
+                            const selectedStatus = getStatusDetails(editForm.status);
+                            const SelectedIcon = selectedStatus.icon;
+                            return (
+                              <>
+                                <SelectedIcon className={`w-4 h-4 ${selectedStatus.text}`} />
+                                <span className={`text-sm font-medium ${selectedStatus.text}`}>{selectedStatus.label}</span>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-500">Select status</span>
+                      )}
+                      <SelectValue className="hidden" placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statusOptions.map((option) => {
+                        const OptionIcon = option.icon;
+                        return (
+                          <SelectItem key={option.value} value={option.value}>
+                            <div className="flex items-center gap-2">
+                              <OptionIcon className={`w-4 h-4 ${option.text}`} />
+                              <span>{option.label}</span>
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
                 ) : (
-                  <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.status}</p>
+                  <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg w-full">
+                    {(() => {
+                      const details = getStatusDetails(selectedDoc.status);
+                      const StatusIcon = details.icon;
+                      return (
+                        <>
+                          <StatusIcon className={`w-4 h-4 ${details.text}`} />
+                          <span className={`text-lg font-medium ${details.text}`}>{details.label}</span>
+                        </>
+                      );
+                    })()}
+                  </div>
                 )}
               </div>
 
