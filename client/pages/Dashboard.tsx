@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import DocumentWizard from "@/components/DocumentWizard";
 import { Button } from "@/components/ui/button";
+import { QRCodeSVG } from "qrcode.react";
 import {
   getDocuments,
   getEmployees,
@@ -78,6 +79,7 @@ export default function Dashboard() {
   const [uploadModalFile, setUploadModalFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [showQrModal, setShowQrModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadModalFileInputRef = useRef<HTMLInputElement>(null);
   const [newEmployeeData, setNewEmployeeData] = useState({
@@ -653,7 +655,7 @@ export default function Dashboard() {
             {/* Modal Content */}
             <div className="p-6 space-y-6">
               {/* Key Information Grid */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4 items-start">
                 <div>
                   <p className="text-xs text-gray-500 uppercase font-semibold">Type</p>
                   <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.type}</p>
@@ -675,6 +677,22 @@ export default function Dashboard() {
                   ) : (
                     <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.source}</p>
                   )}
+                </div>
+                {/* QR Code — spans 2 rows */}
+                <div className="row-span-2 flex flex-col items-center justify-center">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowQrModal(true); }}
+                    className="group p-2 rounded-xl border-2 border-dashed border-gray-300 hover:border-primary hover:bg-primary/5 transition-all"
+                    title="View QR Code"
+                  >
+                    <QRCodeSVG
+                      value={`DTN:${selectedDoc.id}|TITLE:${selectedDoc.title}|STATUS:${selectedDoc.status}`}
+                      size={200}
+                      level="M"
+                      className="rounded"
+                    />
+                  </button>
+                  <p className="text-xs text-gray-400 mt-1 font-medium">Tap to expand</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 uppercase font-semibold">Assigned To</p>
@@ -882,6 +900,42 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* QR Code Expanded Modal */}
+      {showQrModal && selectedDoc && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[60]"
+          onClick={() => setShowQrModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl p-8 flex flex-col items-center gap-6 shadow-2xl max-w-sm w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center">
+              <h3 className="text-xl font-bold text-gray-900">{selectedDoc.title}</h3>
+              <p className="text-sm text-gray-500 font-mono mt-1">{selectedDoc.id}</p>
+            </div>
+            <div className="p-4 bg-white rounded-xl border-4 border-primary/20 shadow-inner">
+              <QRCodeSVG
+                value={`DTN:${selectedDoc.id}|TITLE:${selectedDoc.title}|STATUS:${selectedDoc.status}|SOURCE:${selectedDoc.source}|DEADLINE:${selectedDoc.deadline}`}
+                size={260}
+                level="H"
+                marginSize={2}
+              />
+            </div>
+            <div className="text-center space-y-1">
+              <p className="text-xs text-gray-500 uppercase font-semibold tracking-wide">Scan to verify document</p>
+              <p className="text-xs text-gray-400">{selectedDoc.status} · {selectedDoc.source}</p>
+            </div>
+            <button
+              onClick={() => setShowQrModal(false)}
+              className="w-full py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
