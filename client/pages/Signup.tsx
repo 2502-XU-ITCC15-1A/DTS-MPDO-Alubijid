@@ -22,7 +22,7 @@ export default function Signup() {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/check-email", {
+      const res = await fetch("/api/check-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -50,7 +50,7 @@ export default function Signup() {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/create-account", {
+      const res = await fetch("/api/create-account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, name }),
