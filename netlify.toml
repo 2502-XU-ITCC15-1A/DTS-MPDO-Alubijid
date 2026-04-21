@@ -3,13 +3,19 @@
   functions = "netlify/functions"
   publish = "dist/spa"
 
-
 [functions]
-  external_node_modules = ["express"]
+  external_node_modules = ["express", "multer", "googleapis"]
   node_bundler = "esbuild"
-  
+
+# Proxy /api/* to the Netlify serverless function
 [[redirects]]
-  force = true
   from = "/api/*"
-  status = 200
   to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
+# SPA fallback — must be last, catches all other routes
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
