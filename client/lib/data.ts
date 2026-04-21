@@ -218,6 +218,15 @@ export async function addAuditLog(
   if (error) throw error;
 }
 
+export async function clearFile(documentId: string, fileId: string) {
+  const { error } = await supabase
+    .from("document_files")
+    .delete()
+    .eq("id", fileId)
+    .eq("document_id", documentId);
+  if (error) throw error;
+}
+
 // ── Static data ────────────────────────────────────────────────────────────────
 
 export const locations = [

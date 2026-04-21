@@ -11,6 +11,7 @@ import {
   deleteDocument,
   addAuditLog,
   uploadFile,
+  clearFile,
   locations,
   routingActionOptions,
 } from "@/lib/data";
@@ -755,11 +756,33 @@ export default function Dashboard() {
                           <p className="text-sm font-medium text-gray-900">{file.name}</p>
                           <p className="text-xs text-gray-500">Uploaded by {file.uploadedBy} on {file.uploadedAt}</p>
                         </div>
-                        <a href={file.url} target="_blank" rel="noopener noreferrer">
-                          <Button variant="outline" size="sm" className="flex gap-2">
-                            <Download className="w-4 h-4" />
-                          </Button>
-                        </a>
+                        <div className="flex items-center gap-2">
+                          <a href={file.url} target="_blank" rel="noopener noreferrer">
+                            <Button variant="outline" size="sm" className="flex gap-2">
+                              <Download className="w-4 h-4" />
+                            </Button>
+                          </a>
+                          {user?.role === "admin" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await clearFile(selectedDoc.id, file.id);
+                                  const updated = await getDocuments();
+                                  setDocuments(updated);
+                                  const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                                  if (refreshed) setSelectedDoc(refreshed);
+                                } catch (err) {
+                                  console.error("Failed to delete file:", err);
+                                }
+                              }}
+                              className="flex gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     ))
                   )}
@@ -789,30 +812,42 @@ export default function Dashboard() {
                   )}
                 </div>
 
-                <Button
-                  disabled={!selectedFile || isUploading}
-                  onClick={async () => {
-                    if (!selectedFile) return;
-                    setIsUploading(true);
-                    setUploadError(null);
-                    try {
-                      await uploadFile(selectedDoc.id, selectedFile, user?.name || "User");
-                      const updated = await getDocuments();
-                      setDocuments(updated);
-                      const refreshed = updated.find((d) => d.id === selectedDoc.id);
-                      if (refreshed) setSelectedDoc(refreshed);
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    onClick={() => {
                       setSelectedFile(null);
                       if (fileInputRef.current) fileInputRef.current.value = "";
-                    } catch (err: any) {
-                      setUploadError(err.message || "Upload failed. Make sure the backend server is running.");
-                    } finally {
-                      setIsUploading(false);
-                    }
-                  }}
-                  className="w-full mt-3 bg-primary hover:bg-primary/90 text-white disabled:opacity-50"
-                >
-                  {isUploading ? "Uploading..." : "Upload File"}
-                </Button>
+                    }}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    Clear Upload
+                  </Button>
+                  <Button
+                    disabled={!selectedFile || isUploading}
+                    onClick={async () => {
+                      if (!selectedFile) return;
+                      setIsUploading(true);
+                      setUploadError(null);
+                      try {
+                        await uploadFile(selectedDoc.id, selectedFile, user?.name || "User");
+                        const updated = await getDocuments();
+                        setDocuments(updated);
+                        const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                        if (refreshed) setSelectedDoc(refreshed);
+                        setSelectedFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      } catch (err: any) {
+                        setUploadError(err.message || "Upload failed. Make sure the backend server is running.");
+                      } finally {
+                        setIsUploading(false);
+                      }
+                    }}
+                    className="flex-1 bg-primary hover:bg-primary/90 text-white disabled:opacity-50"
+                  >
+                    {isUploading ? "Uploading..." : "Upload File"}
+                  </Button>
+                </div>
                 {uploadError && (
                   <p className="text-sm text-red-500 mt-2">{uploadError}</p>
                 )}
