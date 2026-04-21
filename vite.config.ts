@@ -8,6 +8,12 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      "/api/check-email": "http://localhost:5000",
+      "/api/create-account": "http://localhost:5000",
+      "/api/upload": "http://localhost:5000",
+      "/api/health": "http://localhost:5000",
+    },
     fs: {
       allow: [".", "./client", "./shared"],
       deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "server/**"],

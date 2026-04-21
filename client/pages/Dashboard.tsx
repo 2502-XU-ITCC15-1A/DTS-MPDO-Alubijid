@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
+import { Html5Qrcode } from "html5-qrcode";
 import { useAuth } from "@/context/AuthContext";
 import DocumentWizard from "@/components/DocumentWizard";
 import { Button } from "@/components/ui/button";
@@ -29,11 +31,13 @@ import {
   Download,
   Eye,
   QrCode,
+  ScanLine,
   Plus,
   MoreVertical,
   Edit,
   Trash2,
   X,
+  Camera,
 } from "lucide-react";
 
 const statusColors = {
@@ -65,6 +69,7 @@ const documentTypeFilters: DocumentType[] = ["Received", "Assigned", "Opened", "
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [activeTab, setActiveTab] = useState<"all" | "incoming" | "outgoing">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -99,6 +104,10 @@ export default function Dashboard() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [showScannerModal, setShowScannerModal] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const [scanResult, setScanResult] = useState<string | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadModalFileInputRef = useRef<HTMLInputElement>(null);
   const [editForm, setEditForm] = useState<{
@@ -127,6 +136,95 @@ export default function Dashboard() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  // Auto-open document from ?doc= URL param (set when QR code is scanned)
+  useEffect(() => {
+    const docId = searchParams.get("doc");
+    if (!docId || documents.length === 0) return;
+    const found = documents.find((d) => d.id === docId);
+    if (found) {
+      setSelectedDoc(found);
+      setDocViewMode("view");
+      setSearchParams({}, { replace: true });
+    }
+  }, [documents, searchParams]);
+
+  // Start camera scanner
+  const startScanner = async () => {
+    setScannerError(null);
+    setScanResult(null);
+    setShowScannerModal(true);
+    await new Promise((r) => setTimeout(r, 100)); // wait for modal to mount
+
+    try {
+      const scanner = new Html5Qrcode("qr-scanner-container");
+      scannerRef.current = scanner;
+
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+          handleQrResult(decodedText);
+        },
+        () => {}
+      );
+    } catch (err: any) {
+      setScannerError(err?.message || "Cannot access camera. Please allow camera permission.");
+    }
+  };
+
+  const stopScanner = async () => {
+    if (scannerRef.current) {
+      try {
+        await scannerRef.current.stop();
+        scannerRef.current.clear();
+      } catch {}
+      scannerRef.current = null;
+    }
+    setShowScannerModal(false);
+    setScanResult(null);
+    setScannerError(null);
+  };
+
+  // Handle scanned QR value — supports both URL and legacy DTN: format
+  const handleQrResult = async (text: string) => {
+    await stopScanner();
+
+    // New URL format: https://.../?doc=DTN-XXXX
+    try {
+      const url = new URL(text);
+      const docId = url.searchParams.get("doc");
+      if (docId) {
+        const found = documents.find((d) => d.id === docId);
+        if (found) {
+          setSelectedDoc(found);
+          setDocViewMode("view");
+        } else {
+          setScanResult(`Document ${docId} not found in the system.`);
+          setShowScannerModal(true);
+        }
+        return;
+      }
+    } catch {}
+
+    // Legacy format: DTN:DTN-2026-001|TITLE:...|STATUS:...
+    const dtnMatch = text.match(/DTN:([^|]+)/);
+    if (dtnMatch) {
+      const docId = dtnMatch[1];
+      const found = documents.find((d) => d.id === docId);
+      if (found) {
+        setSelectedDoc(found);
+        setDocViewMode("view");
+      } else {
+        setScanResult(`Document ${docId} not found in the system.`);
+        setShowScannerModal(true);
+      }
+      return;
+    }
+
+    setScanResult(`Unknown QR code: ${text}`);
+    setShowScannerModal(true);
+  };
 
   const handleAddEmployee = async () => {
     if (!newEmployeeData.name.trim()) return;
@@ -323,6 +421,15 @@ export default function Dashboard() {
                   )}
                 </div>
               )}
+
+              {/* QR Scanner Button */}
+              <button
+                onClick={startScanner}
+                className="p-2 hover:bg-primary/10 rounded-lg transition"
+                title="Scan QR Code"
+              >
+                <ScanLine className="w-5 h-5 text-primary" />
+              </button>
 
               <button
                 onClick={handleLogout}
@@ -802,7 +909,7 @@ export default function Dashboard() {
                     title="View QR Code"
                   >
                     <QRCodeSVG
-                      value={`DTN:${selectedDoc.id}|TITLE:${selectedDoc.title}|STATUS:${selectedDoc.status}`}
+                      value={`${window.location.origin}/dashboard?doc=${selectedDoc.id}`}
                       size={200}
                       level="M"
                       className="rounded"
@@ -1075,6 +1182,80 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Camera QR Scanner Modal */}
+      {showScannerModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[70]">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-primary to-secondary text-white px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Camera className="w-5 h-5" />
+                <h3 className="text-lg font-bold">Scan QR Code</h3>
+              </div>
+              <button
+                onClick={stopScanner}
+                className="p-1 text-white/80 hover:text-white transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scanner viewport */}
+            {!scanResult && !scannerError && (
+              <div className="relative bg-black">
+                <div id="qr-scanner-container" className="w-full" style={{ minHeight: 300 }} />
+                {/* Corner guides */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-48 h-48 relative">
+                    <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-lg" />
+                    <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-lg" />
+                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-lg" />
+                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-lg" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Error state */}
+            {scannerError && (
+              <div className="p-6 text-center space-y-4">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+                  <Camera className="w-8 h-8 text-red-500" />
+                </div>
+                <p className="text-red-600 text-sm font-medium">{scannerError}</p>
+                <p className="text-gray-500 text-xs">Make sure you allowed camera access in your browser settings.</p>
+              </div>
+            )}
+
+            {/* Unknown QR result */}
+            {scanResult && (
+              <div className="p-6 text-center space-y-4">
+                <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto">
+                  <QrCode className="w-8 h-8 text-yellow-600" />
+                </div>
+                <p className="text-gray-800 text-sm font-medium">{scanResult}</p>
+              </div>
+            )}
+
+            {/* Instructions / footer */}
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+              {!scanResult && !scannerError ? (
+                <p className="text-xs text-gray-500 text-center">
+                  Point the camera at an MPDO document QR code to open it instantly.
+                </p>
+              ) : (
+                <button
+                  onClick={stopScanner}
+                  className="w-full py-2 rounded-lg bg-primary text-white font-semibold text-sm hover:bg-primary/90 transition"
+                >
+                  Close
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* QR Code Expanded Modal */}
       {showQrModal && selectedDoc && (
         <div
@@ -1091,7 +1272,7 @@ export default function Dashboard() {
             </div>
             <div className="p-4 bg-white rounded-xl border-4 border-primary/20 shadow-inner">
               <QRCodeSVG
-                value={`DTN:${selectedDoc.id}|TITLE:${selectedDoc.title}|STATUS:${selectedDoc.status}|SOURCE:${selectedDoc.source}|DEADLINE:${selectedDoc.deadline}`}
+                value={`${window.location.origin}/dashboard?doc=${selectedDoc.id}`}
                 size={260}
                 level="H"
                 marginSize={2}
