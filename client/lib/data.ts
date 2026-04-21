@@ -162,39 +162,19 @@ export async function uploadFile(
   file: File,
   uploadedBy: string,
 ): Promise<string> {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("documentId", documentId);
+  const filePath = `${documentId}/${Date.now()}_${file.name}`;
 
-  let response: Response;
-  try {
-    response = await fetch("http://localhost:5000/api/upload", {
-      method: "POST",
-      body: formData,
-    });
-  } catch {
-    throw new Error("Cannot connect to backend. Make sure the backend server is running on port 5000.");
-  }
+  const { error: uploadError } = await supabase.storage
+    .from("documents")
+    .upload(filePath, file, { upsert: false });
 
-  if (!response.ok) {
-    let errMsg = `Upload failed (HTTP ${response.status})`;
-    try {
-      const err = await response.json();
-      errMsg = err.error || errMsg;
-    } catch {
-      // response was not JSON
-    }
-    throw new Error(errMsg);
-  }
+  if (uploadError) throw new Error(uploadError.message);
 
-  let data: any;
-  try {
-    data = await response.json();
-  } catch {
-    throw new Error("Backend returned an invalid response. Check if the backend is running correctly on port 5000.");
-  }
+  const { data: urlData } = supabase.storage
+    .from("documents")
+    .getPublicUrl(filePath);
 
-  const { url } = data;
+  const url = urlData.publicUrl;
 
   await addDocumentFile(documentId, file.name, uploadedBy, url);
   await addAuditLog(documentId, "File Uploaded", uploadedBy, file.name);
