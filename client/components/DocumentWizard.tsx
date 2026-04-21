@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload, ChevronLeft, ChevronRight } from "lucide-react";
 // import { mockEmployees, locations, routingActionOptions } from "@/lib/data";
@@ -16,10 +16,14 @@ interface DocumentWizardProps {
     documentDirection: "Incoming" | "Outgoing";
     routingActions: RoutingAction[];
     routingRemarks: string;
+    file: File | null;
   }) => void;
 }
 
-export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProps) {
+export default function DocumentWizard({
+  onClose,
+  onSubmit,
+}: DocumentWizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     title: "",
@@ -29,9 +33,22 @@ export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProp
     deadline: "",
     documentDirection: "Incoming" as "Incoming" | "Outgoing",
   });
-  const [selectedRoutingActions, setSelectedRoutingActions] = useState<RoutingAction[]>([]);
+  const [selectedRoutingActions, setSelectedRoutingActions] = useState<
+    RoutingAction[]
+  >([]);
   const [routingRemarks, setRoutingRemarks] = useState("");
-  const [employees, setEmployees] = useState<{ id: string; name: string; email: string; department: string; role: string }[]>([]);
+  const [employees, setEmployees] = useState<
+    {
+      id: string;
+      name: string;
+      email: string;
+      department: string;
+      role: string;
+    }[]
+  >([]);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   useEffect(() => {
     const loadEmployees = async () => {
@@ -59,15 +76,23 @@ export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProp
       documentDirection: formData.documentDirection,
       routingActions: selectedRoutingActions,
       routingRemarks,
+      file: selectedFile, // ← add this
     });
   };
 
-  const isStep1Valid = formData.title && formData.documentType && formData.source && formData.deadline;
+  const isStep1Valid =
+    formData.title &&
+    formData.documentType &&
+    formData.source &&
+    formData.deadline;
   const isStep2Valid = formData.assignedTo;
   const isStep3Valid = isStep1Valid && isStep2Valid;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+      onClick={onClose}
+    >
       <div
         className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
@@ -76,9 +101,14 @@ export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProp
         <div className="sticky top-0 bg-gradient-to-r from-primary to-secondary text-white p-6 flex justify-between items-center">
           <div>
             <h3 className="text-2xl font-bold">Add New Document</h3>
-            <p className="text-white/80 text-sm mt-1">Step {currentStep} of 3</p>
+            <p className="text-white/80 text-sm mt-1">
+              Step {currentStep} of 3
+            </p>
           </div>
-          <button onClick={onClose} className="text-white/80 hover:text-white text-2xl">
+          <button
+            onClick={onClose}
+            className="text-white/80 hover:text-white text-2xl"
+          >
             ✕
           </button>
         </div>
@@ -93,7 +123,9 @@ export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProp
                     step <= currentStep ? "bg-primary" : "bg-gray-300"
                   }`}
                 />
-                <span className="text-sm font-medium text-gray-700">Step {step}</span>
+                <span className="text-sm font-medium text-gray-700">
+                  Step {step}
+                </span>
               </div>
             ))}
           </div>
@@ -104,23 +136,33 @@ export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProp
           {/* Step 1: Document Details */}
           {currentStep === 1 && (
             <div className="space-y-4">
-              <h4 className="font-semibold text-gray-900 mb-4">Document Details</h4>
+              <h4 className="font-semibold text-gray-900 mb-4">
+                Document Details
+              </h4>
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Document Title</label>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Document Title
+                </label>
                 <input
                   type="text"
                   value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, title: e.target.value })
+                  }
                   placeholder="Enter document title"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Document Type</label>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Document Type
+                </label>
                 <select
                   value={formData.documentType}
-                  onChange={(e) => setFormData({ ...formData, documentType: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, documentType: e.target.value })
+                  }
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
                 >
                   <option value="">Select Type</option>
@@ -132,10 +174,14 @@ export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProp
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Source</label>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Source
+                </label>
                 <select
                   value={formData.source}
-                  onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, source: e.target.value })
+                  }
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
                 >
                   <option value="">Select Source</option>
@@ -148,10 +194,19 @@ export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProp
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Document Direction</label>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Document Direction
+                </label>
                 <select
                   value={formData.documentDirection}
-                  onChange={(e) => setFormData({ ...formData, documentDirection: e.target.value as "Incoming" | "Outgoing" })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      documentDirection: e.target.value as
+                        | "Incoming"
+                        | "Outgoing",
+                    })
+                  }
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
                 >
                   <option value="Incoming">Incoming</option>
@@ -160,13 +215,64 @@ export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProp
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Deadline</label>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Deadline
+                </label>
                 <input
                   type="date"
                   value={formData.deadline}
-                  onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, deadline: e.target.value })
+                  }
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 />
+              </div>
+
+              {/* File Upload Drop Zone */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Attach File{" "}
+                  <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                  onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                />
+
+                {/* Drop Zone */}
+                <div
+                  className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary transition cursor-pointer"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  {selectedFile ? (
+                    <p className="text-sm text-primary font-medium">
+                      {selectedFile.name}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-gray-600">
+                      Drag and drop or{" "}
+                      <span className="text-primary font-medium">
+                        click to upload
+                      </span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Clear selection */}
+                {selectedFile && (
+                  <button
+                    onClick={() => setSelectedFile(null)}
+                    className="mt-2 text-xs text-red-500 hover:underline"
+                  >
+                    Remove file
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -174,13 +280,19 @@ export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProp
           {/* Step 2: Assignment & Routing */}
           {currentStep === 2 && (
             <div className="space-y-4">
-              <h4 className="font-semibold text-gray-900 mb-4">Assignment & Routing</h4>
+              <h4 className="font-semibold text-gray-900 mb-4">
+                Assignment & Routing
+              </h4>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Assign To Staff Member</label>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Assign To Staff Member
+                </label>
                 <select
                   value={formData.assignedTo}
-                  onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, assignedTo: e.target.value })
+                  }
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
                 >
                   <option value="">Select Staff Member</option>
@@ -195,19 +307,33 @@ export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProp
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-3">Routing Slip Actions</label>
-                <p className="text-sm text-gray-600 mb-3">Select action points for the assigned staff member:</p>
+                <label className="block text-sm font-semibold text-gray-900 mb-3">
+                  Routing Slip Actions
+                </label>
+                <p className="text-sm text-gray-600 mb-3">
+                  Select action points for the assigned staff member:
+                </p>
                 <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
                   {routingActionOptions.map((action) => (
-                    <label key={action} className="flex items-center gap-3 p-2 hover:bg-white rounded cursor-pointer">
+                    <label
+                      key={action}
+                      className="flex items-center gap-3 p-2 hover:bg-white rounded cursor-pointer"
+                    >
                       <input
                         type="checkbox"
                         checked={selectedRoutingActions.includes(action)}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setSelectedRoutingActions([...selectedRoutingActions, action]);
+                            setSelectedRoutingActions([
+                              ...selectedRoutingActions,
+                              action,
+                            ]);
                           } else {
-                            setSelectedRoutingActions(selectedRoutingActions.filter((a) => a !== action));
+                            setSelectedRoutingActions(
+                              selectedRoutingActions.filter(
+                                (a) => a !== action,
+                              ),
+                            );
                           }
                         }}
                         className="rounded border-gray-300"
@@ -219,7 +345,9 @@ export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProp
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Remarks / Instructions</label>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Remarks / Instructions
+                </label>
                 <textarea
                   value={routingRemarks}
                   onChange={(e) => setRoutingRemarks(e.target.value)}
@@ -234,40 +362,70 @@ export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProp
           {/* Step 3: Review & Confirm */}
           {currentStep === 3 && (
             <div className="space-y-4">
-              <h4 className="font-semibold text-gray-900 mb-4">Review & Confirm</h4>
+              <h4 className="font-semibold text-gray-900 mb-4">
+                Review & Confirm
+              </h4>
               <div className="bg-gray-50 rounded-lg p-4 space-y-3 border border-gray-200">
                 <div className="border-b pb-3">
-                  <p className="text-xs text-gray-500 uppercase font-semibold">Document Title</p>
-                  <p className="text-sm font-medium text-gray-900 mt-1">{formData.title || "—"}</p>
-                </div>
-                <div className="border-b pb-3">
-                  <p className="text-xs text-gray-500 uppercase font-semibold">Type</p>
-                  <p className="text-sm font-medium text-gray-900 mt-1">{formData.documentType || "—"}</p>
-                </div>
-                <div className="border-b pb-3">
-                  <p className="text-xs text-gray-500 uppercase font-semibold">Source</p>
-                  <p className="text-sm font-medium text-gray-900 mt-1">{formData.source || "—"}</p>
-                </div>
-                <div className="border-b pb-3">
-                  <p className="text-xs text-gray-500 uppercase font-semibold">Direction</p>
-                  <p className="text-sm font-medium text-gray-900 mt-1">{formData.documentDirection || "—"}</p>
-                </div>
-                <div className="border-b pb-3">
-                  <p className="text-xs text-gray-500 uppercase font-semibold">Deadline</p>
-                  <p className="text-sm font-medium text-gray-900 mt-1">{formData.deadline || "—"}</p>
-                </div>
-                <div className="border-b pb-3">
-                  <p className="text-xs text-gray-500 uppercase font-semibold">Assigned To</p>
+                  <p className="text-xs text-gray-500 uppercase font-semibold">
+                    Document Title
+                  </p>
                   <p className="text-sm font-medium text-gray-900 mt-1">
-                    {employees.find((e) => e.email === formData.assignedTo)?.name || "—"}
+                    {formData.title || "—"}
+                  </p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-xs text-gray-500 uppercase font-semibold">
+                    Type
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {formData.documentType || "—"}
+                  </p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-xs text-gray-500 uppercase font-semibold">
+                    Source
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {formData.source || "—"}
+                  </p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-xs text-gray-500 uppercase font-semibold">
+                    Direction
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {formData.documentDirection || "—"}
+                  </p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-xs text-gray-500 uppercase font-semibold">
+                    Deadline
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {formData.deadline || "—"}
+                  </p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-xs text-gray-500 uppercase font-semibold">
+                    Assigned To
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {employees.find((e) => e.email === formData.assignedTo)
+                      ?.name || "—"}
                   </p>
                 </div>
                 {selectedRoutingActions.length > 0 && (
                   <div>
-                    <p className="text-xs text-gray-500 uppercase font-semibold">Routing Actions</p>
+                    <p className="text-xs text-gray-500 uppercase font-semibold">
+                      Routing Actions
+                    </p>
                     <div className="mt-2 space-y-1">
                       {selectedRoutingActions.map((action) => (
-                        <p key={action} className="text-sm text-gray-700 flex items-center gap-2">
+                        <p
+                          key={action}
+                          className="text-sm text-gray-700 flex items-center gap-2"
+                        >
                           <span className="w-2 h-2 bg-primary rounded-full"></span>
                           {action}
                         </p>
@@ -283,7 +441,11 @@ export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProp
         {/* Navigation Buttons */}
         <div className="border-t border-gray-200 p-6 flex gap-3">
           {currentStep > 1 && (
-            <Button onClick={handleBack} variant="outline" className="flex gap-2">
+            <Button
+              onClick={handleBack}
+              variant="outline"
+              className="flex gap-2"
+            >
               <ChevronLeft className="w-4 h-4" />
               Back
             </Button>
@@ -297,7 +459,9 @@ export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProp
               onClick={handleNext}
               disabled={currentStep === 1 ? !isStep1Valid : !isStep2Valid}
               className={`bg-primary hover:bg-primary/90 text-white flex gap-2 ${
-                (currentStep === 1 ? !isStep1Valid : !isStep2Valid) ? "opacity-50 cursor-not-allowed" : ""
+                (currentStep === 1 ? !isStep1Valid : !isStep2Valid)
+                  ? "opacity-50 cursor-not-allowed"
+                  : ""
               }`}
             >
               Next
