@@ -111,12 +111,14 @@ export default function Dashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadModalFileInputRef = useRef<HTMLInputElement>(null);
   const [editForm, setEditForm] = useState<{
+    documentType: string;
     source: string;
     assignedTo: string;
     status: Document["status"] | "";
     deadline: string;
     destination: string;
   }>({
+    documentType: "",
     source: "",
     assignedTo: "",
     status: "",
@@ -127,6 +129,10 @@ export default function Dashboard() {
     name: "",
     unit: "MPDC",
   });
+  const [customDocumentTypes, setCustomDocumentTypes] = useState<string[]>([]);
+  const [customSources, setCustomSources] = useState<string[]>([]);
+  const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
+  const [newSourceName, setNewSourceName] = useState("");
 
   // Load employees and documents from Supabase on mount
   useEffect(() => {
@@ -135,6 +141,16 @@ export default function Dashboard() {
       .then(setDocuments)
       .catch(console.error)
       .finally(() => setLoading(false));
+
+    // Load custom document types and sources from localStorage
+    const savedCustomTypes = localStorage.getItem("customDocumentTypes");
+    const savedCustomSources = localStorage.getItem("customSources");
+    if (savedCustomTypes) {
+      setCustomDocumentTypes(JSON.parse(savedCustomTypes));
+    }
+    if (savedCustomSources) {
+      setCustomSources(JSON.parse(savedCustomSources));
+    }
   }, []);
 
   // Auto-open document from ?doc= URL param (set when QR code is scanned)
@@ -254,8 +270,12 @@ export default function Dashboard() {
 
     const updatedDoc = {
       ...selectedDoc,
-      ...editForm,
+      type: editForm.documentType || selectedDoc.type,
+      source: editForm.source || selectedDoc.source,
+      assignedTo: editForm.assignedTo || selectedDoc.assignedTo,
       status: editForm.status || selectedDoc.status,
+      deadline: editForm.deadline || selectedDoc.deadline,
+      destination: editForm.destination || selectedDoc.destination,
       updatedAt: new Date().toISOString(),
     };
 
@@ -285,6 +305,26 @@ export default function Dashboard() {
       }
     } catch (err) {
       console.error("Failed to update status:", err);
+    }
+  };
+
+  const handleAddCustomDocumentType = () => {
+    if (newDocumentTypeName.trim() && !customDocumentTypes.includes(newDocumentTypeName.trim())) {
+      const updated = [...customDocumentTypes, newDocumentTypeName.trim()];
+      setCustomDocumentTypes(updated);
+      localStorage.setItem("customDocumentTypes", JSON.stringify(updated));
+      setEditForm({ ...editForm, documentType: newDocumentTypeName.trim() });
+      setNewDocumentTypeName("");
+    }
+  };
+
+  const handleAddCustomSource = () => {
+    if (newSourceName.trim() && !customSources.includes(newSourceName.trim())) {
+      const updated = [...customSources, newSourceName.trim()];
+      setCustomSources(updated);
+      localStorage.setItem("customSources", JSON.stringify(updated));
+      setEditForm({ ...editForm, source: newSourceName.trim() });
+      setNewSourceName("");
     }
   };
 
@@ -662,6 +702,7 @@ export default function Dashboard() {
                     onClick={() => {
                       setSelectedDoc(doc);
                       setEditForm({
+                        documentType: doc.type || "",
                         source: doc.source || "",
                         assignedTo: doc.assignedTo || "",
                         status: doc.status || "",
@@ -881,22 +922,98 @@ export default function Dashboard() {
               <div className="grid grid-cols-3 gap-4 items-start">
                 <div>
                   <p className="text-xs text-gray-500 uppercase font-semibold">Type</p>
-                  <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.type}</p>
+                  {user?.role === "admin" && docViewMode === "edit" ? (
+                    <div className="mt-1">
+                      <select
+                        className="text-base font-medium text-gray-900 px-2 py-1 border border-gray-300 rounded w-full"
+                        value={editForm.documentType || ""}
+                        onChange={(e) => setEditForm({ ...editForm, documentType: e.target.value })}
+                      >
+                        <option value="">Select Type</option>
+                        <option value="Infrastructure">Infrastructure</option>
+                        <option value="Planning">Planning</option>
+                        <option value="Development">Development</option>
+                        <option value="Environmental">Environmental</option>
+                        {customDocumentTypes.map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                        <option value="Others">Others</option>
+                      </select>
+                      {editForm.documentType === "Others" && (
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            type="text"
+                            value={newDocumentTypeName}
+                            onChange={(e) => setNewDocumentTypeName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                handleAddCustomDocumentType();
+                              }
+                            }}
+                            placeholder="Enter new document type"
+                            className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
+                          />
+                          <button
+                            onClick={handleAddCustomDocumentType}
+                            className="p-1 bg-primary hover:bg-primary/90 text-white rounded transition"
+                            title="Confirm"
+                          >
+                            ✓
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.type}</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 uppercase font-semibold">Source</p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
-                    <select
-                      className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
-                      value={editForm.source || ""}
-                      onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
-                    >
-                      {locations.map((loc) => (
-                        <option key={loc} value={loc}>
-                          {loc}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="mt-1">
+                      <select
+                        className="text-base font-medium text-gray-900 px-2 py-1 border border-gray-300 rounded w-full"
+                        value={editForm.source || ""}
+                        onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
+                      >
+                        {locations.map((loc) => (
+                          <option key={loc} value={loc}>
+                            {loc}
+                          </option>
+                        ))}
+                        {customSources.map((src) => (
+                          <option key={src} value={src}>
+                            {src}
+                          </option>
+                        ))}
+                        <option value="Others">Others</option>
+                      </select>
+                      {editForm.source === "Others" && (
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            type="text"
+                            value={newSourceName}
+                            onChange={(e) => setNewSourceName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                handleAddCustomSource();
+                              }
+                            }}
+                            placeholder="Enter new source"
+                            className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
+                          />
+                          <button
+                            onClick={handleAddCustomSource}
+                            className="p-1 bg-primary hover:bg-primary/90 text-white rounded transition"
+                            title="Confirm"
+                          >
+                            ✓
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.source}</p>
                   )}
