@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, ChevronLeft, ChevronRight } from "lucide-react";
+import { Upload, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 // import { mockEmployees, locations, routingActionOptions } from "@/lib/data";
 import { getEmployees, locations, routingActionOptions } from "@/lib/data";
 import { RoutingAction } from "@shared/api";
@@ -266,12 +266,15 @@ export default function DocumentWizard({
 
                 {/* Clear selection */}
                 {selectedFile && (
-                  <button
-                    onClick={() => setSelectedFile(null)}
-                    className="mt-2 text-xs text-red-500 hover:underline"
+                  <Button
+                    onClick={(e) => { e.stopPropagation(); setSelectedFile(null); }}
+                    variant="destructive"
+                    size="sm"
+                    className="mt-2 flex items-center gap-1"
                   >
+                    <Trash2 className="w-3.5 h-3.5" />
                     Remove file
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
