@@ -82,28 +82,21 @@ app.post("/api/get-upload-url", async (req, res) => {
     if (!documentId || !fileName) return res.status(400).json({ error: "Missing fields" });
 
     const folderId = await getOrCreateFolder(documentId);
-    const token = await oauth2Client.getAccessToken();
+    const initRes = await oauth2Client.request({
+      url: "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Upload-Content-Type": mimeType || "application/octet-stream",
+      },
+      data: { name: fileName, parents: [folderId] },
+      responseType: "json",
+    });
 
-    const initRes = await fetch(
-      `https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token.token}`,
-          "Content-Type": "application/json",
-          "X-Upload-Content-Type": mimeType,
-        },
-        body: JSON.stringify({ name: fileName, parents: [folderId] }),
-      }
-    );
+    const uploadUrl = initRes.headers?.location || initRes.headers?.Location;
+    if (!uploadUrl) return res.status(500).json({ error: "No upload URL from Google Drive" });
 
-    if (!initRes.ok) {
-      const err = await initRes.text();
-      return res.status(500).json({ error: err });
-    }
-
-    const uploadUrl = initRes.headers.get("location");
-    res.json({ uploadUrl, folderId });
+    res.json({ uploadUrl });
   } catch (err) {
     console.error("Get upload URL error:", err.message);
     res.status(500).json({ error: err.message });
