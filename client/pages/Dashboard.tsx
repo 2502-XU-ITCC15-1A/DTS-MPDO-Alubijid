@@ -302,7 +302,6 @@ export default function Dashboard() {
     };
     img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgData)))}`;
   };
-
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<string | null>(null);
