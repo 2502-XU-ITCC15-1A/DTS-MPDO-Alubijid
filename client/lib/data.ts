@@ -167,31 +167,38 @@ export async function uploadFile(
   file: File,
   uploadedBy: string,
 ): Promise<string> {
-  // Convert file to base64 so it works reliably in both local and Netlify serverless
-  const base64 = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(",")[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-
-  const res = await fetch("/api/upload", {
+  // Step 1 — Get a resumable upload URL from the backend
+  const urlRes = await fetch("/api/get-upload-url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      documentId,
-      fileName: file.name,
-      mimeType: file.type,
-      fileBase64: base64,
-    }),
+    body: JSON.stringify({ documentId, fileName: file.name, mimeType: file.type }),
   });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "Upload failed" }));
-    throw new Error(err.error || "Upload failed");
+  if (!urlRes.ok) {
+    const err = await urlRes.json().catch(() => ({ error: "Failed to get upload URL" }));
+    throw new Error(err.error || "Failed to get upload URL");
   }
+  const { uploadUrl } = await urlRes.json();
 
-  const { url } = await res.json();
+  // Step 2 — Upload the file directly from the browser to Google Drive (no size limit)
+  const uploadRes = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": file.type },
+    body: file,
+  });
+  if (!uploadRes.ok) throw new Error("Failed to upload file to Google Drive");
+
+  // Google Drive returns the file metadata after upload
+  const driveFile = await uploadRes.json();
+  const fileId = driveFile.id;
+
+  // Step 3 — Make the file public and get the view link
+  const completeRes = await fetch("/api/upload-complete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fileId }),
+  });
+  if (!completeRes.ok) throw new Error("Failed to finalize upload");
+  const { url } = await completeRes.json();
 
   await addDocumentFile(documentId, file.name, uploadedBy, url);
   await addAuditLog(documentId, "File Uploaded", uploadedBy, file.name);

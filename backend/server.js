@@ -75,30 +75,56 @@ async function getOrCreateFolder(documentId) {
   return folder.data.id;
 }
 
-// ── Upload file to Google Drive (JSON base64) ────────────────────────────────
-app.post("/api/upload", async (req, res) => {
+// ── Step 1: Get resumable upload URL ─────────────────────────────────────────
+app.post("/api/get-upload-url", async (req, res) => {
   try {
-    const { documentId, fileName, mimeType, fileBase64 } = req.body;
-    if (!fileBase64) return res.status(400).json({ error: "No file provided" });
-    if (!documentId) return res.status(400).json({ error: "No documentId provided" });
+    const { documentId, fileName, mimeType } = req.body;
+    if (!documentId || !fileName) return res.status(400).json({ error: "Missing fields" });
 
-    const buffer = Buffer.from(fileBase64, "base64");
     const folderId = await getOrCreateFolder(documentId);
+    const token = await oauth2Client.getAccessToken();
 
-    const driveRes = await drive.files.create({
-      requestBody: { name: fileName, parents: [folderId] },
-      media: { mimeType, body: Readable.from(buffer) },
-      fields: "id, webViewLink",
-    });
+    const initRes = await fetch(
+      `https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token.token}`,
+          "Content-Type": "application/json",
+          "X-Upload-Content-Type": mimeType,
+        },
+        body: JSON.stringify({ name: fileName, parents: [folderId] }),
+      }
+    );
+
+    if (!initRes.ok) {
+      const err = await initRes.text();
+      return res.status(500).json({ error: err });
+    }
+
+    const uploadUrl = initRes.headers.get("location");
+    res.json({ uploadUrl, folderId });
+  } catch (err) {
+    console.error("Get upload URL error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Step 2: Make file public after browser uploads to Drive ───────────────────
+app.post("/api/upload-complete", async (req, res) => {
+  try {
+    const { fileId } = req.body;
+    if (!fileId) return res.status(400).json({ error: "Missing fileId" });
 
     await drive.permissions.create({
-      fileId: driveRes.data.id,
+      fileId,
       requestBody: { role: "reader", type: "anyone" },
     });
 
-    res.json({ fileId: driveRes.data.id, url: driveRes.data.webViewLink });
+    const file = await drive.files.get({ fileId, fields: "webViewLink" });
+    res.json({ url: file.data.webViewLink });
   } catch (err) {
-    console.error("Upload error:", err.message);
+    console.error("Upload complete error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
