@@ -118,6 +118,31 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
   }
 });
 
+// ── Delete Google Drive folder for a document ────────────────────────────────
+app.delete("/api/delete-folder/:documentId", async (req, res) => {
+  try {
+    const { documentId } = req.params;
+    const parentId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+
+    const search = await drive.files.list({
+      q: `name='${documentId}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`,
+      fields: "files(id)",
+    });
+
+    if (search.data.files.length === 0) {
+      return res.json({ success: true, message: "No folder found" });
+    }
+
+    const folderId = search.data.files[0].id;
+    await drive.files.delete({ fileId: folderId });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Delete folder error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Check if email is registered by admin ─────────────────────────────────────
 app.post("/api/check-email", async (req, res) => {
   const { email } = req.body;

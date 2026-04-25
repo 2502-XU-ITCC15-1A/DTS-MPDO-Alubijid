@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => ({
       "/api/check-email": "http://localhost:5000",
       "/api/create-account": "http://localhost:5000",
       "/api/upload": "http://localhost:5000",
+      "/api/delete-folder": "http://localhost:5000",
       "/api/health": "http://localhost:5000",
     },
     fs: {

@@ -138,6 +138,11 @@ export async function updateDocument(
 }
 
 export async function deleteDocument(id: string) {
+  // Delete the Google Drive folder for this document (best-effort)
+  try {
+    await fetch(`/api/delete-folder/${encodeURIComponent(id)}`, { method: "DELETE" });
+  } catch {}
+
   const { error } = await supabase.from("documents").delete().eq("id", id);
   if (error) throw error;
 }
@@ -162,19 +167,18 @@ export async function uploadFile(
   file: File,
   uploadedBy: string,
 ): Promise<string> {
-  const filePath = `${documentId}/${Date.now()}_${file.name}`;
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("documentId", documentId);
 
-  const { error: uploadError } = await supabase.storage
-    .from("documents")
-    .upload(filePath, file, { upsert: false });
+  const res = await fetch("/api/upload", { method: "POST", body: formData });
 
-  if (uploadError) throw new Error(uploadError.message);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Upload failed" }));
+    throw new Error(err.error || "Upload failed");
+  }
 
-  const { data: urlData } = supabase.storage
-    .from("documents")
-    .getPublicUrl(filePath);
-
-  const url = urlData.publicUrl;
+  const { url } = await res.json();
 
   await addDocumentFile(documentId, file.name, uploadedBy, url);
   await addAuditLog(documentId, "File Uploaded", uploadedBy, file.name);
