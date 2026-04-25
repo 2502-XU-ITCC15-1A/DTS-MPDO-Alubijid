@@ -183,12 +183,14 @@ export default function Dashboard() {
     status: Document["status"] | "";
     deadline: string;
     destination: string;
+    documentType: string;
   }>({
     source: "",
     assignedTo: "",
     status: "",
     deadline: "",
     destination: "",
+    documentType: "",
   });
   const [newEmployeeData, setNewEmployeeData] = useState({
     name: "",
@@ -221,6 +223,7 @@ export default function Dashboard() {
         status: selectedDoc.status || "",
         deadline: selectedDoc.deadline || "",
         destination: selectedDoc.destination || "",
+        documentType: selectedDoc.type || "",
       });
     }
   }, [selectedDoc?.id]);
@@ -467,15 +470,11 @@ export default function Dashboard() {
 
   const avgResponseTime = "3.2 days";
 
-  // Filter by search (DTN), document type, assignment, and deadline
+  // Filter by search (DTN or document name), document type, assignment, and deadline
   const filteredDocuments = visibleDocuments.filter((doc) => {
-    const matchesSearch = doc.id
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    const matchesDocType =
-      selectedFilter === "all" || doc.documentType === selectedFilter;
-    const matchesAssignment =
-      filterAssignedTo === "all" || doc.assignedTo === filterAssignedTo;
+    const matchesSearch = doc.id.toLowerCase().includes(searchQuery.toLowerCase()) || doc.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesDocType = selectedFilter === "all" || doc.documentType === selectedFilter;
+    const matchesAssignment = filterAssignedTo === "all" || doc.assignedTo === filterAssignedTo;
 
     let matchesDeadline = true;
     if (filterDeadline !== "all") {
@@ -758,7 +757,7 @@ export default function Dashboard() {
                 <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search by DTN..."
+                  placeholder="Search by DTN or document name..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
