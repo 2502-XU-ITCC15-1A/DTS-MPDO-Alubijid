@@ -167,11 +167,24 @@ export async function uploadFile(
   file: File,
   uploadedBy: string,
 ): Promise<string> {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("documentId", documentId);
+  // Convert file to base64 so it works reliably in both local and Netlify serverless
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 
-  const res = await fetch("/api/upload", { method: "POST", body: formData });
+  const res = await fetch("/api/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      documentId,
+      fileName: file.name,
+      mimeType: file.type,
+      fileBase64: base64,
+    }),
+  });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Upload failed" }));

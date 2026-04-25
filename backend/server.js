@@ -75,43 +75,28 @@ async function getOrCreateFolder(documentId) {
   return folder.data.id;
 }
 
-// ── Upload file to Google Drive ───────────────────────────────────────────────
-app.post("/api/upload", upload.single("file"), async (req, res) => {
+// ── Upload file to Google Drive (JSON base64) ────────────────────────────────
+app.post("/api/upload", async (req, res) => {
   try {
-    const file = req.file;
-    const documentId = req.body.documentId;
-    if (!file) return res.status(400).json({ error: "No file provided" });
+    const { documentId, fileName, mimeType, fileBase64 } = req.body;
+    if (!fileBase64) return res.status(400).json({ error: "No file provided" });
     if (!documentId) return res.status(400).json({ error: "No documentId provided" });
 
-    // Get or create subfolder named after the document ID
+    const buffer = Buffer.from(fileBase64, "base64");
     const folderId = await getOrCreateFolder(documentId);
 
-    // Upload file into that subfolder
     const driveRes = await drive.files.create({
-      requestBody: {
-        name: file.originalname,
-        parents: [folderId],
-      },
-      media: {
-        mimeType: file.mimetype,
-        body: Readable.from(file.buffer),
-      },
+      requestBody: { name: fileName, parents: [folderId] },
+      media: { mimeType, body: Readable.from(buffer) },
       fields: "id, webViewLink",
     });
 
-    // Make file viewable by anyone with the link
     await drive.permissions.create({
       fileId: driveRes.data.id,
-      requestBody: {
-        role: "reader",
-        type: "anyone",
-      },
+      requestBody: { role: "reader", type: "anyone" },
     });
 
-    res.json({
-      fileId: driveRes.data.id,
-      url: driveRes.data.webViewLink,
-    });
+    res.json({ fileId: driveRes.data.id, url: driveRes.data.webViewLink });
   } catch (err) {
     console.error("Upload error:", err.message);
     res.status(500).json({ error: err.message });

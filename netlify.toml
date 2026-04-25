@@ -4,7 +4,7 @@
   publish = "dist/spa"
 
 [functions]
-  external_node_modules = ["express", "multer", "googleapis"]
+  external_node_modules = ["express", "busboy", "googleapis"]
   node_bundler = "esbuild"
 
 # Proxy /api/* to the Netlify serverless function

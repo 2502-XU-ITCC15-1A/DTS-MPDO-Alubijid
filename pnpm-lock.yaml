@@ -11,9 +11,15 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.101.1
         version: 2.103.2
+      '@types/busboy':
+        specifier: ^1.5.4
+        version: 1.5.4
       '@types/multer':
         specifier: ^2.1.0
         version: 2.1.0
+      busboy:
+        specifier: ^1.6.0
+        version: 1.6.0
       dotenv:
         specifier: ^17.2.1
         version: 17.2.1
@@ -1405,6 +1411,9 @@ packages:
 
   '@types/body-parser@1.19.6':
     resolution: {integrity: sha512-HLFeCYgz89uk22N5Qg3dvGvsv46B8GLvKKo1zKG4NybA8U2DiEO3w9lqGg29t/tfLRJpJ6iQxnVw4OnB7MoM9g==}
+
+  '@types/busboy@1.5.4':
+    resolution: {integrity: sha512-kG7WrUuAKK0NoyxfQHsVE6j1m01s6kMma64E+OZenQABMQyTJop1DumUWcLwAQ2JzpefU7PDYoRDKl8uZosFjw==}
 
   '@types/chai@5.2.2':
     resolution: {integrity: sha512-8kB30R7Hwqf40JPiKhVzodJs2Qc1ZJ5zuT3uzw5Hq/dhNCl3G3l83jfpdI1e20BP348+fV7VIL/+FxaXkqBmWg==}
@@ -4224,6 +4233,10 @@ snapshots:
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
+      '@types/node': 24.2.1
+
+  '@types/busboy@1.5.4':
+    dependencies:
       '@types/node': 24.2.1
 
   '@types/chai@5.2.2':
