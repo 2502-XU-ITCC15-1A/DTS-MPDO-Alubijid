@@ -104,6 +104,29 @@ export default function Dashboard() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
+
+  const exportQrCode = () => {
+    if (!selectedDoc) return;
+    const svg = document.querySelector("#qr-modal-svg svg") as SVGElement | null;
+    if (!svg) return;
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const canvas = document.createElement("canvas");
+    const size = 300;
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d")!;
+    const img = new Image();
+    img.onload = () => {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, size, size);
+      ctx.drawImage(img, 0, 0, size, size);
+      const link = document.createElement("a");
+      link.download = `QR-${selectedDoc.id}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    };
+    img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgData)))}`;
+  };
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<string | null>(null);
@@ -1387,7 +1410,7 @@ export default function Dashboard() {
               <h3 className="text-xl font-bold text-gray-900">{selectedDoc.title}</h3>
               <p className="text-sm text-gray-500 font-mono mt-1">{selectedDoc.id}</p>
             </div>
-            <div className="p-4 bg-white rounded-xl border-4 border-primary/20 shadow-inner">
+            <div id="qr-modal-svg" className="p-4 bg-white rounded-xl border-4 border-primary/20 shadow-inner">
               <QRCodeSVG
                 value={`${window.location.origin}/dashboard?doc=${selectedDoc.id}`}
                 size={260}
@@ -1399,6 +1422,13 @@ export default function Dashboard() {
               <p className="text-xs text-gray-500 uppercase font-semibold tracking-wide">Scan to verify document</p>
               <p className="text-xs text-gray-400">{selectedDoc.status} · {selectedDoc.source}</p>
             </div>
+            <button
+              onClick={exportQrCode}
+              className="w-full py-2 rounded-lg bg-primary hover:bg-primary/90 text-white font-medium transition flex items-center justify-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Export QR Code
+            </button>
             <button
               onClick={() => setShowQrModal(false)}
               className="w-full py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition"
