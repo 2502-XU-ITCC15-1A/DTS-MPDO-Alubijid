@@ -178,6 +178,7 @@ export default function Dashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadModalFileInputRef = useRef<HTMLInputElement>(null);
   const [editForm, setEditForm] = useState<{
+    documentType: string;
     source: string;
     assignedTo: string;
     status: Document["status"] | "";
@@ -185,12 +186,12 @@ export default function Dashboard() {
     destination: string;
     documentType: string;
   }>({
+    documentType: "",
     source: "",
     assignedTo: "",
     status: "",
     deadline: "",
     destination: "",
-    documentType: "",
   });
   const [newEmployeeData, setNewEmployeeData] = useState({
     name: "",
@@ -212,6 +213,16 @@ export default function Dashboard() {
       .then(setDocuments)
       .catch(console.error)
       .finally(() => setLoading(false));
+
+    // Load custom document types and sources from localStorage
+    const savedCustomTypes = localStorage.getItem("customDocumentTypes");
+    const savedCustomSources = localStorage.getItem("customSources");
+    if (savedCustomTypes) {
+      setCustomDocumentTypes(JSON.parse(savedCustomTypes));
+    }
+    if (savedCustomSources) {
+      setCustomSources(JSON.parse(savedCustomSources));
+    }
   }, []);
 
   // Sync editForm whenever a different document is selected
@@ -836,6 +847,7 @@ export default function Dashboard() {
                     onClick={() => {
                       setSelectedDoc(doc);
                       setEditForm({
+                        documentType: doc.type || "",
                         source: doc.source || "",
                         assignedTo: doc.assignedTo || "",
                         status: doc.status || "",
@@ -1111,11 +1123,21 @@ export default function Dashboard() {
                             type="text"
                             value={newDocumentTypeName}
                             onChange={(e) => setNewDocumentTypeName(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") handleAddCustomDocumentType(); }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                handleAddCustomDocumentType();
+                              }
+                            }}
                             placeholder="Enter new document type"
                             className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
                           />
-                          <button onClick={handleAddCustomDocumentType} className="p-1 bg-primary hover:bg-primary/90 text-white rounded transition" title="Confirm">✓</button>
+                          <button
+                            onClick={handleAddCustomDocumentType}
+                            className="p-1 bg-primary hover:bg-primary/90 text-white rounded transition"
+                            title="Confirm"
+                          >
+                            ✓
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1148,11 +1170,21 @@ export default function Dashboard() {
                             type="text"
                             value={newSourceName}
                             onChange={(e) => setNewSourceName(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") handleAddCustomSource(); }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                handleAddCustomSource();
+                              }
+                            }}
                             placeholder="Enter new source"
                             className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
                           />
-                          <button onClick={handleAddCustomSource} className="p-1 bg-primary hover:bg-primary/90 text-white rounded transition" title="Confirm">✓</button>
+                          <button
+                            onClick={handleAddCustomSource}
+                            className="p-1 bg-primary hover:bg-primary/90 text-white rounded transition"
+                            title="Confirm"
+                          >
+                            ✓
+                          </button>
                         </div>
                       )}
                     </div>
