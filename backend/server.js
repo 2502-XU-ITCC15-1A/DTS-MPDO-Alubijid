@@ -4,6 +4,7 @@ const cors = require("cors");
 const multer = require("multer");
 const { google } = require("googleapis");
 const { Readable } = require("stream");
+const https = require("https");
 const { createClient } = require("@supabase/supabase-js");
 
 // Supabase admin client (service role)
@@ -16,8 +17,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // Google Drive OAuth2 setup
 const oauth2Client = new google.auth.OAuth2(
@@ -30,7 +31,6 @@ oauth2Client.setCredentials({
 });
 const drive = google.drive({ version: "v3", auth: oauth2Client });
 
-// Multer — store file in memory before uploading to Drive
 const upload = multer({ storage: multer.memoryStorage() });
 
 // ── Health check ──────────────────────────────────────────────────────────────
@@ -75,6 +75,59 @@ async function getOrCreateFolder(documentId) {
   return folder.data.id;
 }
 
+// ── Helper: initiate resumable upload session ─────────────────────────────────
+function initResumableUpload(token, fileName, mimeType, folderId) {
+  return new Promise((resolve, reject) => {
+    const metadata = JSON.stringify({ name: fileName, parents: [folderId] });
+    const options = {
+      hostname: "www.googleapis.com",
+      path: "/upload/drive/v3/files?uploadType=resumable",
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json; charset=UTF-8",
+        "Content-Length": Buffer.byteLength(metadata),
+        "X-Upload-Content-Type": mimeType || "application/octet-stream",
+      },
+    };
+    const req = https.request(options, (response) => {
+      const location = response.headers["location"];
+      if (location) resolve(location);
+      else reject(new Error(`No Location header. Status: ${response.statusCode}`));
+    });
+    req.on("error", reject);
+    req.write(metadata);
+    req.end();
+  });
+}
+
+// ── Upload file to Google Drive (multipart form) ─────────────────────────────
+app.post("/api/upload", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No file provided" });
+    const { documentId } = req.body;
+    if (!documentId) return res.status(400).json({ error: "No documentId provided" });
+
+    const folderId = await getOrCreateFolder(documentId);
+
+    const driveRes = await drive.files.create({
+      requestBody: { name: req.file.originalname, parents: [folderId] },
+      media: { mimeType: req.file.mimetype, body: Readable.from(req.file.buffer) },
+      fields: "id, webViewLink",
+    });
+
+    await drive.permissions.create({
+      fileId: driveRes.data.id,
+      requestBody: { role: "reader", type: "anyone" },
+    });
+
+    res.json({ fileId: driveRes.data.id, url: driveRes.data.webViewLink });
+  } catch (err) {
+    console.error("Upload error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Step 1: Get resumable upload URL ─────────────────────────────────────────
 app.post("/api/get-upload-url", async (req, res) => {
   try {
@@ -82,20 +135,10 @@ app.post("/api/get-upload-url", async (req, res) => {
     if (!documentId || !fileName) return res.status(400).json({ error: "Missing fields" });
 
     const folderId = await getOrCreateFolder(documentId);
-    const initRes = await oauth2Client.request({
-      url: "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable",
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Upload-Content-Type": mimeType || "application/octet-stream",
-      },
-      data: { name: fileName, parents: [folderId] },
-      responseType: "json",
-    });
+    const { token } = await oauth2Client.getAccessToken();
+    if (!token) return res.status(500).json({ error: "Failed to get OAuth token" });
 
-    const uploadUrl = initRes.headers?.location || initRes.headers?.Location;
-    if (!uploadUrl) return res.status(500).json({ error: "No upload URL from Google Drive" });
-
+    const uploadUrl = await initResumableUpload(token, fileName, mimeType, folderId);
     res.json({ uploadUrl });
   } catch (err) {
     console.error("Get upload URL error:", err.message);

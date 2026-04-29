@@ -1,6 +1,7 @@
 import serverless from "serverless-http";
 import express from "express";
 import cors from "cors";
+import multer from "multer";
 import { google } from "googleapis";
 import { Readable } from "stream";
 import { createClient } from "@supabase/supabase-js";
@@ -17,6 +18,8 @@ const oauth2Client = new google.auth.OAuth2(
 );
 oauth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
 const drive = google.drive({ version: "v3", auth: oauth2Client });
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 const app = express();
 app.use(cors());
@@ -91,51 +94,29 @@ async function getOrCreateFolder(documentId: string) {
   return folder.data.id;
 }
 
-// Step 1 — Get a resumable Google Drive upload URL (browser uploads directly to Drive)
-app.post("/api/get-upload-url", async (req, res) => {
+// Upload file to Google Drive (multipart form)
+app.post("/api/upload", upload.single("file"), async (req, res) => {
   try {
-    const { documentId, fileName, mimeType } = req.body;
-    if (!documentId || !fileName) return res.status(400).json({ error: "Missing fields" });
+    if (!req.file) return res.status(400).json({ error: "No file provided" });
+    const { documentId } = req.body;
+    if (!documentId) return res.status(400).json({ error: "No documentId provided" });
 
     const folderId = await getOrCreateFolder(documentId);
 
-    // Use googleapis built-in HTTP client — handles OAuth token automatically
-    const initRes = await oauth2Client.request<any>({
-      url: "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable",
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Upload-Content-Type": mimeType || "application/octet-stream",
-      },
-      data: { name: fileName, parents: [folderId] },
-      responseType: "json",
+    const driveRes = await drive.files.create({
+      requestBody: { name: req.file.originalname, parents: [folderId!] },
+      media: { mimeType: req.file.mimetype, body: Readable.from(req.file.buffer) },
+      fields: "id, webViewLink",
     });
 
-    // The resumable upload URL is in the response Location header
-    const uploadUrl = (initRes as any).headers?.location || (initRes as any).headers?.Location;
-    if (!uploadUrl) return res.status(500).json({ error: "No upload URL returned from Google Drive" });
-
-    res.json({ uploadUrl });
-  } catch (err: any) {
-    console.error("get-upload-url error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Step 2 — After browser uploads to Drive, set file public and return view link
-app.post("/api/upload-complete", async (req, res) => {
-  try {
-    const { fileId } = req.body;
-    if (!fileId) return res.status(400).json({ error: "Missing fileId" });
-
     await drive.permissions.create({
-      fileId,
+      fileId: driveRes.data.id!,
       requestBody: { role: "reader", type: "anyone" },
     });
 
-    const file = await drive.files.get({ fileId, fields: "webViewLink" });
-    res.json({ url: file.data.webViewLink });
+    res.json({ fileId: driveRes.data.id, url: driveRes.data.webViewLink });
   } catch (err: any) {
+    console.error("Upload error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
