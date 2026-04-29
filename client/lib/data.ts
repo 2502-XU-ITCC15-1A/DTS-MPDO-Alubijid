@@ -88,7 +88,7 @@ export async function createDocument(
   routingActions: RoutingAction[],
   routingRemarks: string,
   createdBy: string,
-): Promise<void> {
+): Promise<string> {
   const now = new Date().toISOString();
   const dtn = `DTN-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
 
@@ -111,6 +111,7 @@ export async function createDocument(
   if (error) throw error;
 
   await addAuditLog(dtn, "Received", createdBy);
+  return dtn;
 }
 
 export async function updateDocument(
@@ -120,6 +121,7 @@ export async function updateDocument(
     assignedTo: string;
     source: string;
     destination: string;
+    deadline: string;
   }>,
 ) {
   const mapped: Record<string, unknown> = {
@@ -129,6 +131,7 @@ export async function updateDocument(
   if (fields.assignedTo) mapped.assigned_to = fields.assignedTo;
   if (fields.source) mapped.source = fields.source;
   if (fields.destination !== undefined) mapped.destination = fields.destination;
+  if (fields.deadline) mapped.deadline = fields.deadline;
 
   const { error } = await supabase
     .from("documents")

@@ -252,19 +252,25 @@ export default function Dashboard() {
   const handleSaveEdits = async () => {
     if (!selectedDoc) return;
 
-    const updatedDoc = {
-      ...selectedDoc,
-      ...editForm,
-      status: editForm.status || selectedDoc.status,
-      updatedAt: new Date().toISOString(),
-    };
-
     try {
-      // Update local state
+      await updateDocument(selectedDoc.id, {
+        status: (editForm.status as Document["status"]) || selectedDoc.status,
+        assignedTo: editForm.assignedTo,
+        source: editForm.source,
+        destination: editForm.destination,
+        deadline: editForm.deadline,
+      });
+
+      const updatedDoc = {
+        ...selectedDoc,
+        ...editForm,
+        status: (editForm.status as Document["status"]) || selectedDoc.status,
+        updatedAt: new Date().toISOString(),
+      };
+
       setDocuments((prev) =>
         prev.map((doc) => (doc.id === selectedDoc.id ? updatedDoc : doc))
       );
-
       setSelectedDoc(updatedDoc);
       setDocViewMode("view");
     } catch (err) {
@@ -1384,21 +1390,18 @@ export default function Dashboard() {
                   Cancel
                 </Button>
                 <Button
-                  onClick={() => {
+                  onClick={async () => {
                     if (selectedDoc) {
-                      const updatedDoc = {
-                        ...selectedDoc,
-                        history: [
-                          ...selectedDoc.history,
-                          {
-                            action: "Document Approved",
-                            date: new Date().toLocaleString(),
-                            by: user?.name || "Admin",
-                            details: approvalRemarks || "Approved by admin",
-                          },
-                        ],
-                      };
-                      setSelectedDoc(updatedDoc);
+                      try {
+                        await updateDocument(selectedDoc.id, { status: "Approved" });
+                        await addAuditLog(selectedDoc.id, "Document Approved", user?.name || "Admin", approvalRemarks || "Approved by admin");
+                        const updated = await getDocuments();
+                        setDocuments(updated);
+                        const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                        if (refreshed) setSelectedDoc(refreshed);
+                      } catch (err) {
+                        console.error("Failed to approve document:", err);
+                      }
                     }
                     setShowApprovalWorkflow(false);
                     setApprovalRemarks("");
@@ -1430,10 +1433,19 @@ export default function Dashboard() {
                 This document has been marked as done and returned to its source.
               </p>
               <Button
-                onClick={() => {
+                onClick={async () => {
+                  if (selectedDoc) {
+                    try {
+                      await updateDocument(selectedDoc.id, { status: "Approved" });
+                      await addAuditLog(selectedDoc.id, "Marked as Done", user?.name || "Staff", `Returned to ${selectedDoc.source}`);
+                      const updated = await getDocuments();
+                      setDocuments(updated);
+                    } catch (err) {
+                      console.error("Failed to mark as done:", err);
+                    }
+                  }
                   setShowDoneConfirm(false);
                   setSelectedDoc(null);
-                  // Document marked as done - history would be saved in backend
                 }}
                 className="w-full bg-primary hover:bg-primary/90 text-white"
               >
@@ -1534,9 +1546,8 @@ export default function Dashboard() {
             setRoutingRemarks("");
           }}
           onSubmit={async (wizardData) => {
-            // Create new document
             try {
-              await createDocument(
+              const dtn = await createDocument(
                 {
                   id: "",
                   title: wizardData.title,
@@ -1548,7 +1559,6 @@ export default function Dashboard() {
                   assignedTo: wizardData.assignedTo,
                   deadline: wizardData.deadline,
                   source: wizardData.source,
-                  // Set destination only for outgoing documents
                   ...(wizardData.documentDirection === "Outgoing" && { destination: "LGU Office" }),
                   createdAt: new Date().toISOString(),
                   updatedAt: new Date().toISOString(),
@@ -1557,7 +1567,16 @@ export default function Dashboard() {
                 wizardData.routingRemarks,
                 user?.name || "Admin"
               );
-              // Refresh documents list
+
+              // Upload attached file to Google Drive under the new document
+              if (wizardData.file) {
+                try {
+                  await uploadFile(dtn, wizardData.file, user?.name || "Admin");
+                } catch (uploadErr) {
+                  console.error("File upload failed:", uploadErr);
+                }
+              }
+
               const updated = await getDocuments();
               setDocuments(updated);
             } catch (err) {
