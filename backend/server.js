@@ -101,6 +101,18 @@ function initResumableUpload(token, fileName, mimeType, folderId) {
   });
 }
 
+// ── Test Google Drive connection ──────────────────────────────────────────────
+app.get("/api/test-drive", async (_req, res) => {
+  try {
+    const { token } = await oauth2Client.getAccessToken();
+    if (!token) return res.status(500).json({ ok: false, error: "Could not get access token — check GOOGLE_REFRESH_TOKEN" });
+    const list = await drive.files.list({ pageSize: 1, fields: "files(id,name)" });
+    res.json({ ok: true, tokenOk: true, sample: list.data.files });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ── Upload file to Google Drive (multipart form) ─────────────────────────────
 app.post("/api/upload", upload.single("file"), async (req, res) => {
   try {
@@ -108,13 +120,19 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
     const { documentId } = req.body;
     if (!documentId) return res.status(400).json({ error: "No documentId provided" });
 
-    const folderId = await getOrCreateFolder(documentId);
+    console.log(`Uploading "${req.file.originalname}" (${req.file.size} bytes) for document ${documentId}`);
 
+    const folderId = await getOrCreateFolder(documentId);
+    console.log(`Drive folder ID: ${folderId}`);
+
+    // Wrap buffer in array so Readable emits the whole chunk at once (not byte-by-byte)
     const driveRes = await drive.files.create({
       requestBody: { name: req.file.originalname, parents: [folderId] },
-      media: { mimeType: req.file.mimetype, body: Readable.from(req.file.buffer) },
+      media: { mimeType: req.file.mimetype, body: Readable.from([req.file.buffer]) },
       fields: "id, webViewLink",
     });
+
+    console.log(`Uploaded to Drive. File ID: ${driveRes.data.id}`);
 
     await drive.permissions.create({
       fileId: driveRes.data.id,

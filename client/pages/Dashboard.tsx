@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 import { Html5Qrcode } from "html5-qrcode";
 import { useAuth } from "@/context/AuthContext";
@@ -137,6 +138,19 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Sync editForm whenever a different document is selected
+  useEffect(() => {
+    if (selectedDoc) {
+      setEditForm({
+        source: selectedDoc.source || "",
+        assignedTo: selectedDoc.assignedTo || "",
+        status: selectedDoc.status || "",
+        deadline: selectedDoc.deadline || "",
+        destination: selectedDoc.destination || "",
+      });
+    }
+  }, [selectedDoc?.id]);
+
   // Auto-open document from ?doc= URL param (set when QR code is scanned)
   useEffect(() => {
     const docId = searchParams.get("doc");
@@ -252,35 +266,56 @@ export default function Dashboard() {
   const handleSaveEdits = async () => {
     if (!selectedDoc) return;
 
+    const newStatus = (editForm.status as Document["status"]) || selectedDoc.status;
+    const actor = user?.name || "Admin";
+
     try {
       await updateDocument(selectedDoc.id, {
-        status: (editForm.status as Document["status"]) || selectedDoc.status,
+        status: newStatus,
         assignedTo: editForm.assignedTo,
         source: editForm.source,
         destination: editForm.destination,
         deadline: editForm.deadline,
       });
 
-      const updatedDoc = {
-        ...selectedDoc,
-        ...editForm,
-        status: (editForm.status as Document["status"]) || selectedDoc.status,
-        updatedAt: new Date().toISOString(),
-      };
+      // Log every field that actually changed
+      if (newStatus !== selectedDoc.status) {
+        await addAuditLog(selectedDoc.id, "Status Updated", actor, `"${selectedDoc.status}" → "${newStatus}"`);
+      }
+      if (editForm.assignedTo !== selectedDoc.assignedTo) {
+        const oldName = employees.find((e) => e.email === selectedDoc.assignedTo)?.name || selectedDoc.assignedTo;
+        const newName = employees.find((e) => e.email === editForm.assignedTo)?.name || editForm.assignedTo;
+        await addAuditLog(selectedDoc.id, "Reassigned", actor, `"${oldName}" → "${newName}"`);
+      }
+      if (editForm.source !== selectedDoc.source) {
+        await addAuditLog(selectedDoc.id, "Source Updated", actor, `"${selectedDoc.source}" → "${editForm.source}"`);
+      }
+      if (editForm.deadline !== selectedDoc.deadline) {
+        await addAuditLog(selectedDoc.id, "Deadline Updated", actor, `"${selectedDoc.deadline}" → "${editForm.deadline}"`);
+      }
+      if ((editForm.destination || "") !== (selectedDoc.destination || "")) {
+        await addAuditLog(selectedDoc.id, "Destination Updated", actor, `"${selectedDoc.destination || "None"}" → "${editForm.destination || "None"}"`);
+      }
 
-      setDocuments((prev) =>
-        prev.map((doc) => (doc.id === selectedDoc.id ? updatedDoc : doc))
-      );
-      setSelectedDoc(updatedDoc);
+      // Refresh from DB so the audit log section shows the new entries immediately
+      const updated = await getDocuments();
+      setDocuments(updated);
+      const refreshed = updated.find((d) => d.id === selectedDoc.id);
+      if (refreshed) setSelectedDoc(refreshed);
       setDocViewMode("view");
-    } catch (err) {
+      toast.success("Document updated successfully.");
+    } catch (err: any) {
       console.error("Failed to save edits:", err);
+      toast.error(err.message || "Failed to save changes.");
     }
   };
 
   const handleDocStatusChange = async (docId: string, value: Document["status"]) => {
     try {
+      const doc = documents.find((d) => d.id === docId);
+      const oldStatus = doc?.status || "";
       await updateDocument(docId, { status: value });
+      await addAuditLog(docId, "Status Updated", user?.name || "Admin", `"${oldStatus}" → "${value}"`);
       setDocuments((prev) =>
         prev.map((doc) =>
           doc.id === docId ? { ...doc, status: value, updatedAt: new Date().toISOString() } : doc
@@ -1318,13 +1353,21 @@ export default function Dashboard() {
                 Cancel
               </Button>
               <Button
-                onClick={async () => {
+                onClick={async (e) => {
+                  const btn = e.currentTarget;
+                  btn.disabled = true;
+                  btn.textContent = "Deleting...";
                   if (deletingDocId) {
                     try {
                       await deleteDocument(deletingDocId);
                       setDocuments((prev) => prev.filter((d) => d.id !== deletingDocId));
-                    } catch (err) {
+                      toast.success("Document and all files deleted.");
+                    } catch (err: any) {
                       console.error("Failed to delete document:", err);
+                      toast.error(err.message || "Failed to delete document.");
+                      btn.disabled = false;
+                      btn.textContent = "Delete";
+                      return;
                     }
                   }
                   setShowDeleteConfirm(false);

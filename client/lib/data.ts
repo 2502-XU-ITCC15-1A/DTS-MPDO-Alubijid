@@ -141,10 +141,16 @@ export async function updateDocument(
 }
 
 export async function deleteDocument(id: string) {
-  // Delete the Google Drive folder for this document (best-effort)
-  try {
-    await fetch(`/api/delete-folder/${encodeURIComponent(id)}`, { method: "DELETE" });
-  } catch {}
+  // Delete the Google Drive folder and all files inside it
+  const driveRes = await fetch(`/api/delete-folder/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!driveRes.ok) {
+    const err = await driveRes.json().catch(() => ({}));
+    throw new Error(err.error || "Failed to delete files from Google Drive");
+  }
+
+  // Delete related Supabase records
+  await supabase.from("document_files").delete().eq("document_id", id);
+  await supabase.from("audit_logs").delete().eq("document_id", id);
 
   const { error } = await supabase.from("documents").delete().eq("id", id);
   if (error) throw error;
