@@ -11,6 +11,7 @@ import {
   getEmployees,
   addEmployee,
   updateEmployeeRole,
+  deleteEmployee,
   updateDocument,
   createDocument,
   deleteDocument,
@@ -33,7 +34,7 @@ import {
   QrCode,
   ScanLine,
   Plus,
-  MoreVertical,
+  Menu,
   Edit,
   Trash2,
   X,
@@ -104,6 +105,30 @@ export default function Dashboard() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
+
+  const exportQrCode = () => {
+    if (!selectedDoc) return;
+    const svg = document.querySelector("#qr-modal-svg svg") as SVGElement | null;
+    if (!svg) return;
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const canvas = document.createElement("canvas");
+    const size = 300;
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d")!;
+    const img = new Image();
+    img.onload = () => {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, size, size);
+      ctx.drawImage(img, 0, 0, size, size);
+      const link = document.createElement("a");
+      link.download = `QR-${selectedDoc.id}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    };
+    img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgData)))}`;
+  };
+
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<string | null>(null);
@@ -111,12 +136,14 @@ export default function Dashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadModalFileInputRef = useRef<HTMLInputElement>(null);
   const [editForm, setEditForm] = useState<{
+    documentType: string;
     source: string;
     assignedTo: string;
     status: Document["status"] | "";
     deadline: string;
     destination: string;
   }>({
+    documentType: "",
     source: "",
     assignedTo: "",
     status: "",
@@ -127,14 +154,44 @@ export default function Dashboard() {
     name: "",
     unit: "MPDC",
   });
+  const [customDocumentTypes, setCustomDocumentTypes] = useState<string[]>([]);
+  const [customSources, setCustomSources] = useState<string[]>([]);
+  const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
+  const [newSourceName, setNewSourceName] = useState("");
 
   // Load employees and documents from Supabase on mount
   useEffect(() => {
     getEmployees().then(setEmployees).catch(console.error);
     getDocuments()
-      .then(setDocuments)
+      .then(async (docs) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const toMarkOverdue = docs.filter((d) => {
+          if (!d.deadline || !["Pending", "Processing"].includes(d.status)) return false;
+          const dl = new Date(d.deadline);
+          dl.setHours(0, 0, 0, 0);
+          return dl < today;
+        });
+        if (toMarkOverdue.length > 0) {
+          await Promise.all(toMarkOverdue.map((d) => updateDocument(d.id, { status: "Overdue" })));
+          const refreshed = await getDocuments();
+          setDocuments(refreshed);
+        } else {
+          setDocuments(docs);
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
+
+    // Load custom document types and sources from localStorage
+    const savedCustomTypes = localStorage.getItem("customDocumentTypes");
+    const savedCustomSources = localStorage.getItem("customSources");
+    if (savedCustomTypes) {
+      setCustomDocumentTypes(JSON.parse(savedCustomTypes));
+    }
+    if (savedCustomSources) {
+      setCustomSources(JSON.parse(savedCustomSources));
+    }
   }, []);
 
   // Auto-open document from ?doc= URL param (set when QR code is scanned)
@@ -252,19 +309,31 @@ export default function Dashboard() {
   const handleSaveEdits = async () => {
     if (!selectedDoc) return;
 
+    const resolvedDeadline = editForm.deadline || selectedDoc.deadline;
+    const resolvedStatus = (editForm.status as Document["status"]) || selectedDoc.status;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const effectiveStatus: Document["status"] =
+      resolvedDeadline &&
+      ["Pending", "Processing"].includes(resolvedStatus) &&
+      new Date(resolvedDeadline) < today
+        ? "Overdue"
+        : resolvedStatus;
+
     try {
       await updateDocument(selectedDoc.id, {
-        status: (editForm.status as Document["status"]) || selectedDoc.status,
+        status: effectiveStatus,
         assignedTo: editForm.assignedTo,
         source: editForm.source,
         destination: editForm.destination,
-        deadline: editForm.deadline,
+        deadline: resolvedDeadline,
       });
 
       const updatedDoc = {
         ...selectedDoc,
         ...editForm,
-        status: (editForm.status as Document["status"]) || selectedDoc.status,
+        status: effectiveStatus,
+        deadline: resolvedDeadline,
         updatedAt: new Date().toISOString(),
       };
 
@@ -291,6 +360,26 @@ export default function Dashboard() {
       }
     } catch (err) {
       console.error("Failed to update status:", err);
+    }
+  };
+
+  const handleAddCustomDocumentType = () => {
+    if (newDocumentTypeName.trim() && !customDocumentTypes.includes(newDocumentTypeName.trim())) {
+      const updated = [...customDocumentTypes, newDocumentTypeName.trim()];
+      setCustomDocumentTypes(updated);
+      localStorage.setItem("customDocumentTypes", JSON.stringify(updated));
+      setEditForm({ ...editForm, documentType: newDocumentTypeName.trim() });
+      setNewDocumentTypeName("");
+    }
+  };
+
+  const handleAddCustomSource = () => {
+    if (newSourceName.trim() && !customSources.includes(newSourceName.trim())) {
+      const updated = [...customSources, newSourceName.trim()];
+      setCustomSources(updated);
+      localStorage.setItem("customSources", JSON.stringify(updated));
+      setEditForm({ ...editForm, source: newSourceName.trim() });
+      setNewSourceName("");
     }
   };
 
@@ -375,7 +464,7 @@ export default function Dashboard() {
                     className="p-2 hover:bg-gray-100 rounded-lg transition"
                     title="Employee Management"
                   >
-                    <MoreVertical className="w-5 h-5 text-gray-600" />
+                    <Menu className="w-5 h-5 text-gray-600" />
                   </button>
 
                   {showEmployeeMenu && (
@@ -396,10 +485,24 @@ export default function Dashboard() {
                         </div>
                         <div className="space-y-2 max-h-64 overflow-y-auto">
                           {employees.map((employee) => (
-                            <div key={employee.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
-                              <div>
-                                <p className="text-sm font-medium text-gray-900">{employee.email}</p>
-                                <p className="text-xs text-gray-500">{employee.name}</p>
+                            <div key={employee.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await deleteEmployee(employee.id);
+                                    setEmployees((prev) => prev.filter((emp) => emp.id !== employee.id));
+                                  } catch (err) {
+                                    console.error("Failed to remove employee:", err);
+                                  }
+                                }}
+                                className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition flex-shrink-0"
+                                title="Remove employee"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{employee.email}</p>
+                                <p className="text-xs text-gray-500 truncate">{employee.name}</p>
                               </div>
                               <select
                                 value={employee.role}
@@ -414,7 +517,7 @@ export default function Dashboard() {
                                     console.error("Failed to update role:", err);
                                   }
                                 }}
-                                className="text-xs px-2 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50"
+                                className="text-xs px-2 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 flex-shrink-0"
                               >
                                 <option value="staff">Staff</option>
                                 <option value="admin">Admin</option>
@@ -665,6 +768,7 @@ export default function Dashboard() {
                     onClick={() => {
                       setSelectedDoc(doc);
                       setEditForm({
+                        documentType: doc.type || "",
                         source: doc.source || "",
                         assignedTo: doc.assignedTo || "",
                         status: doc.status || "",
@@ -738,7 +842,7 @@ export default function Dashboard() {
                               className="p-2 hover:bg-gray-200 rounded-lg transition"
                               title="More options"
                             >
-                              <MoreVertical className="w-5 h-5 text-gray-600" />
+                              <Menu className="w-5 h-5 text-gray-600" />
                             </button>
 
                             {openMenuDocId === doc.id && (
@@ -884,22 +988,98 @@ export default function Dashboard() {
               <div className="grid grid-cols-3 gap-4 items-start">
                 <div>
                   <p className="text-xs text-gray-500 uppercase font-semibold">Type</p>
-                  <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.type}</p>
+                  {user?.role === "admin" && docViewMode === "edit" ? (
+                    <div className="mt-1">
+                      <select
+                        className="text-base font-medium text-gray-900 px-2 py-1 border border-gray-300 rounded w-full"
+                        value={editForm.documentType || ""}
+                        onChange={(e) => setEditForm({ ...editForm, documentType: e.target.value })}
+                      >
+                        <option value="">Select Type</option>
+                        <option value="Infrastructure">Infrastructure</option>
+                        <option value="Planning">Planning</option>
+                        <option value="Development">Development</option>
+                        <option value="Environmental">Environmental</option>
+                        {customDocumentTypes.map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                        <option value="Others">Others</option>
+                      </select>
+                      {editForm.documentType === "Others" && (
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            type="text"
+                            value={newDocumentTypeName}
+                            onChange={(e) => setNewDocumentTypeName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                handleAddCustomDocumentType();
+                              }
+                            }}
+                            placeholder="Enter new document type"
+                            className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
+                          />
+                          <button
+                            onClick={handleAddCustomDocumentType}
+                            className="p-1 bg-primary hover:bg-primary/90 text-white rounded transition"
+                            title="Confirm"
+                          >
+                            ✓
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.type}</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 uppercase font-semibold">Source</p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
-                    <select
-                      className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
-                      value={editForm.source || ""}
-                      onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
-                    >
-                      {locations.map((loc) => (
-                        <option key={loc} value={loc}>
-                          {loc}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="mt-1">
+                      <select
+                        className="text-base font-medium text-gray-900 px-2 py-1 border border-gray-300 rounded w-full"
+                        value={editForm.source || ""}
+                        onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
+                      >
+                        {locations.map((loc) => (
+                          <option key={loc} value={loc}>
+                            {loc}
+                          </option>
+                        ))}
+                        {customSources.map((src) => (
+                          <option key={src} value={src}>
+                            {src}
+                          </option>
+                        ))}
+                        <option value="Others">Others</option>
+                      </select>
+                      {editForm.source === "Others" && (
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            type="text"
+                            value={newSourceName}
+                            onChange={(e) => setNewSourceName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                handleAddCustomSource();
+                              }
+                            }}
+                            placeholder="Enter new source"
+                            className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
+                          />
+                          <button
+                            onClick={handleAddCustomSource}
+                            className="p-1 bg-primary hover:bg-primary/90 text-white rounded transition"
+                            title="Confirm"
+                          >
+                            ✓
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.source}</p>
                   )}
@@ -1009,7 +1189,6 @@ export default function Dashboard() {
                       ) : (
                         <span className="text-sm text-gray-500">Select status</span>
                       )}
-                      <SelectValue className="hidden" placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
                       {statusOptions.map((option) => {
@@ -1273,7 +1452,7 @@ export default function Dashboard() {
               <h3 className="text-xl font-bold text-gray-900">{selectedDoc.title}</h3>
               <p className="text-sm text-gray-500 font-mono mt-1">{selectedDoc.id}</p>
             </div>
-            <div className="p-4 bg-white rounded-xl border-4 border-primary/20 shadow-inner">
+            <div id="qr-modal-svg" className="p-4 bg-white rounded-xl border-4 border-primary/20 shadow-inner">
               <QRCodeSVG
                 value={`${window.location.origin}/dashboard?doc=${selectedDoc.id}`}
                 size={260}
@@ -1285,6 +1464,13 @@ export default function Dashboard() {
               <p className="text-xs text-gray-500 uppercase font-semibold tracking-wide">Scan to verify document</p>
               <p className="text-xs text-gray-400">{selectedDoc.status} · {selectedDoc.source}</p>
             </div>
+            <button
+              onClick={exportQrCode}
+              className="w-full py-2 rounded-lg bg-primary hover:bg-primary/90 text-white font-medium transition flex items-center justify-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Export QR Code
+            </button>
             <button
               onClick={() => setShowQrModal(false)}
               className="w-full py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition"

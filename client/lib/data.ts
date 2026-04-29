@@ -29,6 +29,11 @@ export async function updateEmployeeRole(id: string, role: "admin" | "staff") {
   if (error) throw error;
 }
 
+export async function deleteEmployee(id: string) {
+  const { error } = await supabase.from("employees").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // ── Documents ─────────────────────────────────────────────────────────────────
 
 export async function getDocuments(): Promise<Document[]> {
