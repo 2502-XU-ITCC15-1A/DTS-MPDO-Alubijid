@@ -124,11 +124,41 @@ export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProp
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
                 >
                   <option value="">Select Type</option>
-                  <option value="Infrastructure">Infrastructure</option>
-                  <option value="Planning">Planning</option>
-                  <option value="Development">Development</option>
-                  <option value="Environmental">Environmental</option>
+                  {defaultDocumentTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                  {customDocumentTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                  <option value="Others">Others</option>
                 </select>
+                {formData.documentType === "Others" && (
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      type="text"
+                      value={newDocumentTypeName}
+                      onChange={(e) => setNewDocumentTypeName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          handleAddCustomDocumentType();
+                        }
+                      }}
+                      placeholder="Enter new document type"
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <button
+                      onClick={handleAddCustomDocumentType}
+                      className="p-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition"
+                      title="Confirm"
+                    >
+                      <CheckCircle className="w-5 h-5" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -144,7 +174,36 @@ export default function DocumentWizard({ onClose, onSubmit }: DocumentWizardProp
                       {loc}
                     </option>
                   ))}
+                  {customSources.map((src) => (
+                    <option key={src} value={src}>
+                      {src}
+                    </option>
+                  ))}
+                  <option value="Others">Others</option>
                 </select>
+                {formData.source === "Others" && (
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      type="text"
+                      value={newSourceName}
+                      onChange={(e) => setNewSourceName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          handleAddCustomSource();
+                        }
+                      }}
+                      placeholder="Enter new source"
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <button
+                      onClick={handleAddCustomSource}
+                      className="p-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition"
+                      title="Confirm"
+                    >
+                      <CheckCircle className="w-5 h-5" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
