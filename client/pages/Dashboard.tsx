@@ -329,9 +329,12 @@ export default function Dashboard() {
         deadline: resolvedDeadline,
       });
 
-      const updatedDoc = {
+      const updatedDoc: Document = {
         ...selectedDoc,
-        ...editForm,
+        type: (editForm.documentType || selectedDoc.type) as Document["type"],
+        source: editForm.source || selectedDoc.source,
+        assignedTo: editForm.assignedTo || selectedDoc.assignedTo,
+        destination: editForm.destination || selectedDoc.destination,
         status: effectiveStatus,
         deadline: resolvedDeadline,
         updatedAt: new Date().toISOString(),
