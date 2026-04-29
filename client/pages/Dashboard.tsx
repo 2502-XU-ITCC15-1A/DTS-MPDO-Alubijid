@@ -184,7 +184,6 @@ export default function Dashboard() {
     status: Document["status"] | "";
     deadline: string;
     destination: string;
-    documentType: string;
   }>({
     documentType: "",
     source: "",
