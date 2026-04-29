@@ -438,11 +438,11 @@ export default function Dashboard() {
 
   const avgResponseTime = "3.2 days";
 
-  // Filter by search (DTN), document type, assignment, and deadline
+  // Filter by search (DTN or document name), document type, assignment, and deadline
   const filteredDocuments = visibleDocuments.filter((doc) => {
-    const matchesSearch = doc.id
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
+    const matchesSearch =
+      doc.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesDocType =
       selectedFilter === "all" || doc.documentType === selectedFilter;
     const matchesAssignment =
@@ -729,7 +729,7 @@ export default function Dashboard() {
                 <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search by DTN..."
+                  placeholder="Search by DTN or document name..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
@@ -737,6 +737,21 @@ export default function Dashboard() {
               </div>
 
               {/* Document Type Filter */}
+              <select
+                value={selectedFilter}
+                onChange={(e) =>
+                  setSelectedFilter(e.target.value as DocumentType | "all")
+                }
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
+              >
+                <option value="all">All Types</option>
+                {documentTypeFilters.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+
               {/* Assignment Filter - admin only */}
               {user?.role === "admin" && (
                 <select
