@@ -161,7 +161,24 @@ export default function Dashboard() {
   useEffect(() => {
     getEmployees().then(setEmployees).catch(console.error);
     getDocuments()
-      .then(setDocuments)
+      .then(async (docs) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const overdueUpdates = docs
+          .filter((d) => {
+            if (!d.deadline || !["Pending", "Processing"].includes(d.status)) return false;
+            const deadline = new Date(d.deadline);
+            deadline.setHours(0, 0, 0, 0);
+            return deadline < today;
+          });
+        if (overdueUpdates.length > 0) {
+          await Promise.all(overdueUpdates.map((d) => updateDocument(d.id, { status: "Overdue" })));
+          const refreshed = await getDocuments();
+          setDocuments(refreshed);
+        } else {
+          setDocuments(docs);
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
 
@@ -291,13 +308,24 @@ export default function Dashboard() {
   const handleSaveEdits = async () => {
     if (!selectedDoc) return;
 
+    const resolvedDeadline = editForm.deadline || selectedDoc.deadline;
+    const resolvedStatus = editForm.status || selectedDoc.status;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const effectiveStatus =
+      resolvedDeadline &&
+      ["Pending", "Processing"].includes(resolvedStatus) &&
+      new Date(resolvedDeadline) < today
+        ? "Overdue"
+        : resolvedStatus;
+
     const updatedDoc = {
       ...selectedDoc,
       type: editForm.documentType || selectedDoc.type,
       source: editForm.source || selectedDoc.source,
       assignedTo: editForm.assignedTo || selectedDoc.assignedTo,
-      status: editForm.status || selectedDoc.status,
-      deadline: editForm.deadline || selectedDoc.deadline,
+      status: effectiveStatus as typeof selectedDoc.status,
+      deadline: resolvedDeadline,
       destination: editForm.destination || selectedDoc.destination,
       updatedAt: new Date().toISOString(),
     };
