@@ -128,6 +128,21 @@ const documentTypeFilters: DocumentType[] = [
   "Released",
 ];
 
+const designationOptionsByUnit: Record<string, string[]> = {
+  MPDC: ["Municipal Planning and Development Coordinator"],
+  ARIS: [
+    "Administrative Head / Overall Supervisor",
+    "Records / Monitoring Staff",
+  ],
+  PRDD: ["Statistician"],
+  ZLURD: [
+    "Division Head / Project Evaluator",
+    "Draftsman / Senior Technical Staff",
+    "GIS Specialist",
+    "Drone Pilot / Inspector",
+  ],
+};
+
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -200,6 +215,7 @@ export default function Dashboard() {
   const [newEmployeeData, setNewEmployeeData] = useState({
     name: "",
     unit: "MPDC",
+    designation: designationOptionsByUnit.MPDC[0],
   });
   const [customDocumentTypes, setCustomDocumentTypes] = useState<string[]>(() =>
     JSON.parse(localStorage.getItem("customDocumentTypes") || "[]"),
@@ -342,13 +358,17 @@ export default function Dashboard() {
         email,
         name: newEmployeeData.name,
         role: "staff",
-        department: newEmployeeData.unit,
+        department: newEmployeeData.designation,
       });
       setEmployees([...employees, newEmployee]);
     } catch (err) {
       console.error("Failed to add employee:", err);
     }
-    setNewEmployeeData({ name: "", unit: "MPDC" });
+    setNewEmployeeData({
+      name: "",
+      unit: "MPDC",
+      designation: designationOptionsByUnit.MPDC[0],
+    });
     setShowAddEmployeeModal(false);
   };
 
@@ -2056,6 +2076,8 @@ export default function Dashboard() {
                     setNewEmployeeData({
                       ...newEmployeeData,
                       unit: e.target.value,
+                      designation:
+                        designationOptionsByUnit[e.target.value]?.[0] || "",
                     })
                   }
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
@@ -2075,6 +2097,30 @@ export default function Dashboard() {
                 </select>
               </div>
 
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Designation
+                </label>
+                <select
+                  value={newEmployeeData.designation}
+                  onChange={(e) =>
+                    setNewEmployeeData({
+                      ...newEmployeeData,
+                      designation: e.target.value,
+                    })
+                  }
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
+                >
+                  {designationOptionsByUnit[newEmployeeData.unit]?.map(
+                    (designation) => (
+                      <option key={designation} value={designation}>
+                        {designation}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </div>
+
               <div className="bg-blue-50 p-3 rounded-lg">
                 <p className="text-sm text-blue-700">
                   <span className="font-semibold">Email:</span>{" "}
@@ -2087,7 +2133,11 @@ export default function Dashboard() {
                 <Button
                   onClick={() => {
                     setShowAddEmployeeModal(false);
-                    setNewEmployeeData({ name: "", unit: "MPDC" });
+                    setNewEmployeeData({
+                      name: "",
+                      unit: "MPDC",
+                      designation: designationOptionsByUnit.MPDC[0],
+                    });
                   }}
                   variant="outline"
                   className="flex-1"
