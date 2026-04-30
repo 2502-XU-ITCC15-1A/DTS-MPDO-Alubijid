@@ -25,6 +25,9 @@ import {
   deleteDocumentFile,
   addAuditLog,
   uploadFile,
+  sendDocumentForApproval,
+  approveDocument,
+  reviseDocument,
   locations,
   routingActionOptions,
 } from "@/lib/data";
@@ -80,6 +83,18 @@ const statusColors = {
     text: "text-red-700",
     icon: AlertCircle,
   },
+  "Sent for approval": {
+    bg: "bg-purple-50",
+    border: "border-purple-200",
+    text: "text-purple-700",
+    icon: HourglassIcon,
+  },
+  Completed: {
+    bg: "bg-green-50",
+    border: "border-green-200",
+    text: "text-green-700",
+    icon: CheckCircle,
+  },
 };
 
 const statusOptions = [
@@ -107,10 +122,22 @@ const statusOptions = [
     icon: AlertCircle,
     text: "text-red-700",
   },
+  {
+    value: "Sent for approval",
+    label: "Sent for Approval",
+    icon: HourglassIcon,
+    text: "text-purple-700",
+  },
+  {
+    value: "Completed",
+    label: "Completed",
+    icon: CheckCircle,
+    text: "text-green-700",
+  },
 ] as const;
 
 const getStatusDetails = (status: string) => {
-  if (status === "Approved" || status === "Released") {
+  if (status === "Approved" || status === "Released" || status === "Completed") {
     return statusOptions[2];
   }
   return (
@@ -176,6 +203,9 @@ export default function Dashboard() {
   const [docViewMode, setDocViewMode] = useState<"view" | "edit">("view");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [showEmployeeDeleteConfirm, setShowEmployeeDeleteConfirm] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
+  const [isDeletingEmployee, setIsDeletingEmployee] = useState(false);
   const [showApprovalWorkflow, setShowApprovalWorkflow] = useState(false);
   const [approvalRemarks, setApprovalRemarks] = useState("");
   const [filterAssignedTo, setFilterAssignedTo] = useState<string>("all");
@@ -253,6 +283,10 @@ export default function Dashboard() {
   );
   const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
   const [newSourceName, setNewSourceName] = useState("");
+  const [showRevisionModal, setShowRevisionModal] = useState(false);
+  const [revisionComments, setRevisionComments] = useState("");
+  const [isApprovingDoc, setIsApprovingDoc] = useState(false);
+  const [isRevisingDoc, setIsRevisingDoc] = useState(false);
 
   // Load employees and documents from Supabase on mount
   useEffect(() => {
@@ -596,9 +630,12 @@ export default function Dashboard() {
     processing: visibleDocuments.filter((d) => d.status === "Processing")
       .length,
     completed: visibleDocuments.filter(
-      (d) => d.status === "Approved" || d.status === "Released",
+      (d) => d.status === "Approved" || d.status === "Released" || d.status === "Completed",
     ).length,
     overdue: visibleDocuments.filter((d) => d.status === "Overdue").length,
+    sentForApproval: visibleDocuments.filter(
+      (d) => d.status === "Sent for approval",
+    ).length,
   };
 
   const avgResponseTime = "3.2 days";
@@ -796,7 +833,7 @@ export default function Dashboard() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
@@ -849,6 +886,20 @@ export default function Dashboard() {
               </div>
               <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
                 <AlertCircle className="w-6 h-6 text-red-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">Sent for Approval</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {stats.sentForApproval}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                <HourglassIcon className="w-6 h-6 text-purple-600" />
               </div>
             </div>
           </div>
@@ -1246,6 +1297,70 @@ export default function Dashboard() {
                           ) : (
                             <CheckCircle className="w-5 h-5" />
                           )}
+                        </button>
+                      )}
+
+                      {/* Approve button - only for documents sent for approval */}
+                      {selectedDoc.status === "Sent for approval" && docViewMode === "view" && (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setIsApprovingDoc(true);
+                            try {
+                              await approveDocument(selectedDoc.id, user?.name || "Admin");
+                              const updated = await getDocuments();
+                              setDocuments(updated);
+                              const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                              if (refreshed) setSelectedDoc(refreshed);
+                              toast.success("Document approved successfully.");
+                            } catch (err: any) {
+                              console.error("Failed to approve document:", err);
+                              toast.error(err.message || "Failed to approve document.");
+                            } finally {
+                              setIsApprovingDoc(false);
+                            }
+                          }}
+                          disabled={isApprovingDoc}
+                          className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-100 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={isApprovingDoc ? "Approving..." : "Approve"}
+                        >
+                          {isApprovingDoc ? (
+                            <svg
+                              className="w-5 h-5 animate-spin"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              />
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8v8z"
+                              />
+                            </svg>
+                          ) : (
+                            <CheckCircle className="w-5 h-5" />
+                          )}
+                        </button>
+                      )}
+
+                      {/* Revise button - only for documents sent for approval */}
+                      {selectedDoc.status === "Sent for approval" && docViewMode === "view" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowRevisionModal(true);
+                          }}
+                          className="p-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-100 rounded transition"
+                          title="Revise"
+                        >
+                          <Edit className="w-5 h-5" />
                         </button>
                       )}
 
@@ -1782,6 +1897,27 @@ export default function Dashboard() {
                 </div>
               )}
 
+              {/* Revision Comments - displayed when admin sends revisions */}
+              {selectedDoc.revisionComments && (
+                <div className="border-t pt-6">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0">
+                        <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-yellow-900 mb-2">
+                          Admin Comments for Revision
+                        </h4>
+                        <p className="text-yellow-800 text-sm whitespace-pre-wrap">
+                          {selectedDoc.revisionComments}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Document History */}
               <div className="border-t pt-6">
                 <h4 className="font-semibold text-gray-900 mb-4">
@@ -1811,13 +1947,34 @@ export default function Dashboard() {
 
               {/* Staff-only Done Button */}
               {user?.role === "staff" && (
-                <div className="border-t pt-6">
-                  <Button
-                    onClick={() => setShowDoneConfirm(true)}
-                    className="w-full bg-gray-400 hover:bg-gray-500 text-white font-semibold py-2"
-                  >
-                    Mark as Done
-                  </Button>
+                <div className="border-t pt-6 space-y-3">
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={async () => {
+                        if (!selectedDoc) return;
+                        try {
+                          await sendDocumentForApproval(selectedDoc.id, user?.name || "Staff");
+                          const updated = await getDocuments();
+                          setDocuments(updated);
+                          const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                          if (refreshed) setSelectedDoc(refreshed);
+                          toast.success("Document sent for admin approval.");
+                        } catch (err: any) {
+                          console.error("Failed to send for approval:", err);
+                          toast.error(err.message || "Failed to send for approval.");
+                        }
+                      }}
+                      className="flex-1 bg-primary hover:bg-primary/90 text-white font-semibold py-2"
+                    >
+                      Send for Admin Approval
+                    </Button>
+                    <Button
+                      onClick={() => setShowDoneConfirm(true)}
+                      className="flex-1 bg-gray-400 hover:bg-gray-500 text-white font-semibold py-2"
+                    >
+                      Mark as Done
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1960,6 +2117,56 @@ export default function Dashboard() {
             >
               Close
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Employee Confirmation Modal */}
+      {showEmployeeDeleteConfirm && employeeToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full">
+            <div className="bg-red-100 border-l-4 border-red-500 p-6">
+              <h3 className="font-bold text-red-900 text-lg">Delete Employee</h3>
+              <p className="text-red-700 text-sm mt-2">
+                Are you sure you want to remove {employeeToDelete.name} ({employeeToDelete.email})?
+                This will also delete their Supabase authentication account.
+              </p>
+            </div>
+
+            <div className="p-6 flex gap-3">
+              <Button
+                onClick={() => {
+                  setShowEmployeeDeleteConfirm(false);
+                  setEmployeeToDelete(null);
+                }}
+                variant="outline"
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!employeeToDelete || isDeletingEmployee) return;
+                  setIsDeletingEmployee(true);
+                  try {
+                    await deleteEmployee(employeeToDelete.id);
+                    setEmployees((prev) => prev.filter((emp) => emp.id !== employeeToDelete.id));
+                    toast.success("Employee deleted and auth record removed.");
+                  } catch (err: any) {
+                    console.error("Failed to delete employee:", err);
+                    toast.error(err?.message || "Failed to delete employee.");
+                  } finally {
+                    setIsDeletingEmployee(false);
+                    setShowEmployeeDeleteConfirm(false);
+                    setEmployeeToDelete(null);
+                  }
+                }}
+                className="flex-1"
+                disabled={isDeletingEmployee}
+              >
+                {isDeletingEmployee ? "Deleting..." : "Delete"}
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -2380,6 +2587,84 @@ export default function Dashboard() {
             setRoutingRemarks("");
           }}
         />
+      )}
+
+      {/* Revision Comments Modal */}
+      {showRevisionModal && selectedDoc && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full">
+            <div className="bg-yellow-100 border-l-4 border-yellow-500 p-6">
+              <h3 className="font-bold text-yellow-900 text-lg">
+                Revision Comments
+              </h3>
+              <p className="text-yellow-700 text-sm mt-2">
+                Document: <span className="font-semibold">{selectedDoc.title}</span>
+              </p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Comments for Staff
+                </label>
+                <textarea
+                  value={revisionComments}
+                  onChange={(e) => setRevisionComments(e.target.value)}
+                  placeholder="Enter revision comments that will be sent back to the staff..."
+                  rows={5}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 resize-none"
+                />
+              </div>
+
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-700">
+                  <span className="font-semibold">Note:</span> These comments will be displayed to the staff member with the document when it's sent back.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => {
+                    setShowRevisionModal(false);
+                    setRevisionComments("");
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (!revisionComments.trim() || !selectedDoc) {
+                      toast.error("Please enter revision comments.");
+                      return;
+                    }
+                    setIsRevisingDoc(true);
+                    try {
+                      await reviseDocument(selectedDoc.id, revisionComments, user?.name || "Admin");
+                      const updated = await getDocuments();
+                      setDocuments(updated);
+                      const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                      if (refreshed) setSelectedDoc(refreshed);
+                      toast.success("Document revised and sent back to staff.");
+                      setShowRevisionModal(false);
+                      setRevisionComments("");
+                    } catch (err: any) {
+                      console.error("Failed to revise document:", err);
+                      toast.error(err.message || "Failed to revise document.");
+                    } finally {
+                      setIsRevisingDoc(false);
+                    }
+                  }}
+                  disabled={isRevisingDoc}
+                  className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isRevisingDoc ? "Sending..." : "Send Revision"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
