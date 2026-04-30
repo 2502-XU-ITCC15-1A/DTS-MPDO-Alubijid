@@ -392,9 +392,8 @@ export default function Dashboard() {
           editForm.assignedTo;
         await addAuditLog(
           selectedDoc.id,
-          "Reassigned",
+          `Reassigned from ${oldName} to ${newName}`,
           actor,
-          `"${oldName}" → "${newName}"`,
         );
       }
       if (editForm.source !== selectedDoc.source) {
@@ -2119,6 +2118,13 @@ export default function Dashboard() {
             if (isSubmitting) return;
             setIsSubmitting(true);
             try {
+              // Get the name of the assigned staff member
+              const assignedStaff = employees.find(
+                (e) => e.email === wizardData.assignedTo,
+              );
+              const assignedToName =
+                assignedStaff?.name || wizardData.assignedTo;
+
               const dtn = await createDocument(
                 {
                   id: "",
@@ -2140,6 +2146,7 @@ export default function Dashboard() {
                 wizardData.routingActions,
                 wizardData.routingRemarks,
                 user?.name || "Admin",
+                assignedToName,
               );
 
               // Upload attached file to Google Drive under the new document
