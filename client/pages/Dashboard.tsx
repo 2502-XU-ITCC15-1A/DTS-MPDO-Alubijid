@@ -128,12 +128,6 @@ const statusOptions = [
     icon: HourglassIcon,
     text: "text-purple-700",
   },
-  {
-    value: "Completed",
-    label: "Completed",
-    icon: CheckCircle,
-    text: "text-green-700",
-  },
 ] as const;
 
 const getStatusDetails = (status: string) => {
@@ -147,6 +141,19 @@ const getStatusDetails = (status: string) => {
 
 const getStatusValue = (status: Document["status"]) =>
   status === "Released" ? "Approved" : status;
+
+const getStatusLabel = (status: Document["status"] | string | undefined) =>
+  status ? getStatusDetails(status).label : "Unknown";
+
+const formatStatusChange = (
+  oldStatus: Document["status"] | string | undefined,
+  newStatus: Document["status"] | string,
+) => `Changed from ${getStatusLabel(oldStatus)} to ${getStatusLabel(newStatus)}`;
+
+const formatStatusChangeTitle = (
+  oldStatus: Document["status"] | string | undefined,
+  newStatus: Document["status"] | string,
+) => `Status Changed: ${getStatusLabel(oldStatus)} → ${getStatusLabel(newStatus)}`;
 
 const documentTypeFilters: DocumentType[] = [
   "Received",
@@ -460,12 +467,27 @@ export default function Dashboard() {
     window.location.href = "/login";
   };
 
+  const addStatusChangeLog = async (
+    documentId: string,
+    oldStatus: Document["status"] | string | undefined,
+    newStatus: Document["status"] | string,
+    actor: string,
+    note?: string,
+  ) => {
+    await addAuditLog(
+      documentId,
+      formatStatusChangeTitle(oldStatus, newStatus),
+      actor,
+      [formatStatusChange(oldStatus, newStatus), note]
+        .filter(Boolean)
+        .join(". "),
+    );
+  };
+
   const handleSaveEdits = async () => {
     if (!selectedDoc || isSaving) return;
     setIsSaving(true);
 
-    const newStatus =
-      (editForm.status as Document["status"]) || selectedDoc.status;
     const actor = user?.name || "Admin";
 
     const resolvedDeadline = editForm.deadline || selectedDoc.deadline;
@@ -491,11 +513,11 @@ export default function Dashboard() {
 
       // Log every field that actually changed
       if (effectiveStatus !== selectedDoc.status) {
-        await addAuditLog(
+        await addStatusChangeLog(
           selectedDoc.id,
-          "Status Updated",
+          selectedDoc.status,
+          effectiveStatus,
           actor,
-          `"${selectedDoc.status}" → "${effectiveStatus}"`,
         );
       }
       if (editForm.assignedTo !== selectedDoc.assignedTo) {
@@ -558,25 +580,24 @@ export default function Dashboard() {
     try {
       const doc = documents.find((d) => d.id === docId);
       const oldStatus = doc?.status || "";
+      if (oldStatus === value) return;
+
       await updateDocument(docId, { status: value });
-      await addAuditLog(
-        docId,
-        "Status Updated",
-        user?.name || "Admin",
-        `"${oldStatus}" → "${value}"`,
-      );
-      setDocuments((prev) =>
-        prev.map((doc) =>
-          doc.id === docId
-            ? { ...doc, status: value, updatedAt: new Date().toISOString() }
-            : doc,
-        ),
-      );
+      await addStatusChangeLog(docId, oldStatus, value, user?.name || "Staff");
+
+      const updated = await getDocuments();
+      setDocuments(updated);
       if (selectedDoc?.id === docId) {
-        setSelectedDoc({ ...selectedDoc, status: value });
+        const refreshed = updated.find((d) => d.id === docId);
+        if (refreshed) {
+          setSelectedDoc(refreshed);
+          setEditForm((prev) => ({ ...prev, status: refreshed.status }));
+        }
       }
+      toast.success(`Status changed to ${value}.`);
     } catch (err) {
       console.error("Failed to update status:", err);
+      toast.error("Failed to update status.");
     }
   };
 
@@ -1307,7 +1328,11 @@ export default function Dashboard() {
                             e.stopPropagation();
                             setIsApprovingDoc(true);
                             try {
-                              await approveDocument(selectedDoc.id, user?.name || "Admin");
+                              await approveDocument(
+                                selectedDoc.id,
+                                user?.name || "Admin",
+                                selectedDoc.status,
+                              );
                               const updated = await getDocuments();
                               setDocuments(updated);
                               const refreshed = updated.find((d) => d.id === selectedDoc.id);
@@ -1630,15 +1655,20 @@ export default function Dashboard() {
                 <p className="text-xs text-gray-500 uppercase font-semibold mb-2">
                   Status
                 </p>
-                {docViewMode === "edit" ? (
+                {docViewMode === "edit" || user?.role === "staff" ? (
                   <Select
                     value={editForm.status || ""}
                     onValueChange={(value) => {
+                      const nextStatus = value as Document["status"];
                       setEditForm({
                         ...editForm,
-                        status: value as Document["status"],
+                        status: nextStatus,
                       });
-                      if (value === "Approved") {
+                      if (user?.role === "staff") {
+                        handleDocStatusChange(selectedDoc.id, nextStatus);
+                        return;
+                      }
+                      if (nextStatus === "Approved") {
                         setShowApprovalWorkflow(true);
                       }
                     }}
@@ -1939,6 +1969,11 @@ export default function Dashboard() {
                         <p className="text-sm text-gray-500">
                           {entry.date} • By {entry.by}
                         </p>
+                        {entry.details && (
+                          <p className="text-sm text-gray-700 mt-1">
+                            {entry.details}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1953,7 +1988,11 @@ export default function Dashboard() {
                       onClick={async () => {
                         if (!selectedDoc) return;
                         try {
-                          await sendDocumentForApproval(selectedDoc.id, user?.name || "Staff");
+                          await sendDocumentForApproval(
+                            selectedDoc.id,
+                            user?.name || "Staff",
+                            selectedDoc.status,
+                          );
                           const updated = await getDocuments();
                           setDocuments(updated);
                           const refreshed = updated.find((d) => d.id === selectedDoc.id);
@@ -2290,9 +2329,10 @@ export default function Dashboard() {
                       await updateDocument(selectedDoc.id, {
                         status: "Approved",
                       });
-                      await addAuditLog(
+                      await addStatusChangeLog(
                         selectedDoc.id,
-                        "Document Approved",
+                        selectedDoc.status,
+                        "Approved",
                         user?.name || "Admin",
                         approvalRemarks || "Approved by admin",
                       );
@@ -2349,9 +2389,10 @@ export default function Dashboard() {
                     await updateDocument(selectedDoc.id, {
                       status: "Approved",
                     });
-                    await addAuditLog(
+                    await addStatusChangeLog(
                       selectedDoc.id,
-                      "Marked as Done",
+                      selectedDoc.status,
+                      "Approved",
                       user?.name || "Staff",
                       `Returned to ${selectedDoc.source}`,
                     );
@@ -2641,7 +2682,12 @@ export default function Dashboard() {
                     }
                     setIsRevisingDoc(true);
                     try {
-                      await reviseDocument(selectedDoc.id, revisionComments, user?.name || "Admin");
+                      await reviseDocument(
+                        selectedDoc.id,
+                        revisionComments,
+                        user?.name || "Admin",
+                        selectedDoc.status,
+                      );
                       const updated = await getDocuments();
                       setDocuments(updated);
                       const refreshed = updated.find((d) => d.id === selectedDoc.id);

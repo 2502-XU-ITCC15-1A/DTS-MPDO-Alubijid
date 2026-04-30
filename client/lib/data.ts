@@ -246,26 +246,28 @@ export async function addAuditLog(
 export async function sendDocumentForApproval(
   documentId: string,
   approver: string,
+  oldStatus?: string,
 ) {
   await updateDocument(documentId, { status: "Sent for approval" });
   await addAuditLog(
     documentId,
     "Sent for Admin Approval",
     approver,
-    "Document submitted for admin review",
+    `Changed from ${oldStatus || "Unknown"} to Sent for approval. Document submitted for admin review`,
   );
 }
 
 export async function approveDocument(
   documentId: string,
   approver: string,
+  oldStatus?: string,
 ) {
   await updateDocument(documentId, { status: "Completed" });
   await addAuditLog(
     documentId,
     "Document Approved",
     approver,
-    "Document approved by admin",
+    `Changed from ${oldStatus || "Unknown"} to Completed. Document approved by admin`,
   );
 }
 
@@ -273,6 +275,7 @@ export async function reviseDocument(
   documentId: string,
   comments: string,
   revisor: string,
+  oldStatus?: string,
 ) {
   const mapped: Record<string, unknown> = {
     status: "Pending",
@@ -290,7 +293,7 @@ export async function reviseDocument(
     documentId,
     "Document Revised",
     revisor,
-    `Revision comments: ${comments}`,
+    `Changed from ${oldStatus || "Unknown"} to Pending. Revision comments: ${comments}`,
   );
 }
 
