@@ -500,9 +500,8 @@ export default function Dashboard() {
       if (effectiveStatus !== selectedDoc.status) {
         await addAuditLog(
           selectedDoc.id,
-          "Status Updated",
+          `Status changed from ${selectedDoc.status} to ${effectiveStatus}`,
           actor,
-          `"${selectedDoc.status}" → "${effectiveStatus}"`,
         );
       }
       if (editForm.assignedTo !== selectedDoc.assignedTo) {
@@ -1453,11 +1452,11 @@ export default function Dashboard() {
                         <option value="Zoning, Certification, and Locational Clearance">
                           Zoning, Certification, and Locational Clearance
                         </option>
-                        {customDocumentTypes.map((type) => (
+                        {/* {customDocumentTypes.map((type) => (
                           <option key={type} value={type}>
                             {type}
                           </option>
-                        ))}
+                        ))} */}
                         <option value="Others">Others</option>
                       </select>
                       {editForm.documentType === "Others" && (
@@ -1510,12 +1509,12 @@ export default function Dashboard() {
                             {loc}
                           </option>
                         ))}
-                        {customSources.map((src) => (
+                        {/* {customSources.map((src) => (
                           <option key={src} value={src}>
                             {src}
                           </option>
-                        ))}
-                        <option value="Others">Others</option>
+                        ))} */}
+                        {/* <option value="Others">Others</option> */}
                       </select>
                       {editForm.source === "Others" && (
                         <div className="mt-2 flex gap-2">
