@@ -2508,12 +2508,25 @@ export default function Dashboard() {
                 </select>
               </div>
 
-              <div className="bg-blue-50 p-3 rounded-lg">
+              <div className="bg-blue-50 p-3 rounded-lg flex items-center justify-between">
                 <p className="text-sm text-blue-700">
                   <span className="font-semibold">Email:</span>{" "}
                   {newEmployeeData.name.toLowerCase().replace(/\s+/g, ".")}
                   @alubijid.gov.ph
                 </p>
+                <button
+                  type="button"
+                  title="Copy email"
+                  onClick={() => {
+                    const email = `${newEmployeeData.name.toLowerCase().replace(/\s+/g, ".")}@alubijid.gov.ph`;
+                    navigator.clipboard.writeText(email);
+                  }}
+                  className="ml-2 p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-100 rounded transition-colors flex-shrink-0"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </button>
               </div>
 
               <div className="flex gap-3 pt-4 border-t">
