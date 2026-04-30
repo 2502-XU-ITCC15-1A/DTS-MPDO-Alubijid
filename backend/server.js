@@ -262,6 +262,46 @@ app.post("/api/create-account", async (req, res) => {
   res.json({ success: true });
 });
 
+// ── Delete employee record and Supabase auth user by employee ID ────────────
+app.delete("/api/delete-employee/:id", async (req, res) => {
+  const { id } = req.params;
+  if (!id) return res.status(400).json({ error: "Employee ID required." });
+
+  const { data: employee, error: empError } = await supabaseAdmin
+    .from("employees")
+    .select("email")
+    .eq("id", id)
+    .single();
+
+  if (empError || !employee) {
+    return res.status(404).json({ error: empError?.message || "Employee not found." });
+  }
+
+  const { data: { users }, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
+  if (listErr) {
+    return res.status(500).json({ error: "Failed to look up auth users." });
+  }
+
+  const authUser = users.find((user) => user.email === employee.email);
+  if (authUser) {
+    const { error: deleteErr } = await supabaseAdmin.auth.admin.deleteUser(authUser.id);
+    if (deleteErr) {
+      return res.status(500).json({ error: deleteErr.message });
+    }
+  }
+
+  const { error: deleteEmployeeError } = await supabaseAdmin
+    .from("employees")
+    .delete()
+    .eq("id", id);
+
+  if (deleteEmployeeError) {
+    return res.status(500).json({ error: deleteEmployeeError.message });
+  }
+
+  res.json({ success: true });
+});
+
 // ── Send OTP for password reset (email-based) ────────────────────────────────
 app.post("/api/send-otp", async (req, res) => {
   const { email } = req.body;
