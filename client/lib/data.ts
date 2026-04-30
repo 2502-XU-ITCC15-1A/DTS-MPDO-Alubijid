@@ -66,6 +66,7 @@ export async function getDocuments(): Promise<Document[]> {
         source: doc.source,
         destination: doc.destination,
         routingSlip: doc.routing_slip,
+        revisionComments: doc.revision_comments,
         createdAt: doc.created_at,
         updatedAt: doc.updated_at,
         files: (files ?? []).map((f) => ({
@@ -229,6 +230,57 @@ export async function addAuditLog(
     details: details ?? null,
   });
   if (error) throw error;
+}
+
+export async function sendDocumentForApproval(
+  documentId: string,
+  approver: string,
+) {
+  await updateDocument(documentId, { status: "Sent for approval" });
+  await addAuditLog(
+    documentId,
+    "Sent for Admin Approval",
+    approver,
+    "Document submitted for admin review",
+  );
+}
+
+export async function approveDocument(
+  documentId: string,
+  approver: string,
+) {
+  await updateDocument(documentId, { status: "Completed" });
+  await addAuditLog(
+    documentId,
+    "Document Approved",
+    approver,
+    "Document approved by admin",
+  );
+}
+
+export async function reviseDocument(
+  documentId: string,
+  comments: string,
+  revisor: string,
+) {
+  const mapped: Record<string, unknown> = {
+    status: "Pending",
+    revision_comments: comments,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase
+    .from("documents")
+    .update(mapped)
+    .eq("id", documentId);
+  if (error) throw error;
+
+  await addAuditLog(
+    documentId,
+    "Document Revised",
+    revisor,
+    `Revision comments: ${comments}`,
+  );
 }
 
 // ── Static data ────────────────────────────────────────────────────────────────
