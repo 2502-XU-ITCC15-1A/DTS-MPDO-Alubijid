@@ -18,9 +18,11 @@ import {
   getEmployees,
   addEmployee,
   updateEmployeeRole,
+  deleteEmployee,
   updateDocument,
   createDocument,
   deleteDocument,
+  deleteDocumentFile,
   addAuditLog,
   uploadFile,
   locations,
@@ -40,7 +42,7 @@ import {
   QrCode,
   ScanLine,
   Plus,
-  MoreVertical,
+  Menu,
   Edit,
   Trash2,
   X,
@@ -191,6 +193,30 @@ export default function Dashboard() {
   const [isMarkingDone, setIsMarkingDone] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+
+  const exportQrCode = () => {
+    if (!selectedDoc) return;
+    const svg = document.querySelector("#qr-modal-svg svg") as SVGElement | null;
+    if (!svg) return;
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const canvas = document.createElement("canvas");
+    const size = 300;
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d")!;
+    const img = new Image();
+    img.onload = () => {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, size, size);
+      ctx.drawImage(img, 0, 0, size, size);
+      const link = document.createElement("a");
+      link.download = `QR-${selectedDoc.id}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    };
+    img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgData)))}`;
+  };
+
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<string | null>(null);
@@ -230,7 +256,23 @@ export default function Dashboard() {
   useEffect(() => {
     getEmployees().then(setEmployees).catch(console.error);
     getDocuments()
-      .then(setDocuments)
+      .then(async (docs) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const toMarkOverdue = docs.filter((d) => {
+          if (!d.deadline || !["Pending", "Processing"].includes(d.status)) return false;
+          const dl = new Date(d.deadline);
+          dl.setHours(0, 0, 0, 0);
+          return dl < today;
+        });
+        if (toMarkOverdue.length > 0) {
+          await Promise.all(toMarkOverdue.map((d) => updateDocument(d.id, { status: "Overdue" })));
+          const refreshed = await getDocuments();
+          setDocuments(refreshed);
+        } else {
+          setDocuments(docs);
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
 
@@ -271,7 +313,7 @@ export default function Dashboard() {
     }
   }, [documents, searchParams]);
 
-  // Start camera scanner
+  // Startt camera scanner
   const startScanner = async () => {
     setScannerError(null);
     setScanResult(null);
@@ -385,23 +427,29 @@ export default function Dashboard() {
       (editForm.status as Document["status"]) || selectedDoc.status;
     const actor = user?.name || "Admin";
 
+    const resolvedDeadline = editForm.deadline || selectedDoc.deadline;
+    const resolvedStatus = (editForm.status as Document["status"]) || selectedDoc.status;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const effectiveStatus: Document["status"] =
+      resolvedDeadline &&
+      ["Pending", "Processing"].includes(resolvedStatus) &&
+      new Date(resolvedDeadline) < today
+        ? "Overdue"
+        : resolvedStatus;
+
     try {
       await updateDocument(selectedDoc.id, {
-        status: newStatus,
+        status: effectiveStatus,
         assignedTo: editForm.assignedTo,
         source: editForm.source,
         destination: editForm.destination,
-        deadline: editForm.deadline,
+        deadline: resolvedDeadline,
       });
 
       // Log every field that actually changed
-      if (newStatus !== selectedDoc.status) {
-        await addAuditLog(
-          selectedDoc.id,
-          "Status Updated",
-          actor,
-          `"${selectedDoc.status}" → "${newStatus}"`,
-        );
+      if (effectiveStatus !== selectedDoc.status) {
+        await addAuditLog(selectedDoc.id, "Status Updated", actor, `"${selectedDoc.status}" → "${effectiveStatus}"`);
       }
       if (editForm.assignedTo !== selectedDoc.assignedTo) {
         const oldName =
@@ -619,7 +667,7 @@ export default function Dashboard() {
                     className="p-2 hover:bg-gray-100 rounded-lg transition"
                     title="Employee Management"
                   >
-                    <MoreVertical className="w-5 h-5 text-gray-600" />
+                    <Menu className="w-5 h-5 text-gray-600" />
                   </button>
 
                   {showEmployeeMenu && (
@@ -642,17 +690,24 @@ export default function Dashboard() {
                         </div>
                         <div className="space-y-2 max-h-64 overflow-y-auto">
                           {employees.map((employee) => (
-                            <div
-                              key={employee.id}
-                              className="flex items-center justify-between p-2 hover:bg-gray-50 rounded"
-                            >
-                              <div>
-                                <p className="text-sm font-medium text-gray-900">
-                                  {employee.email}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {employee.name}
-                                </p>
+                            <div key={employee.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await deleteEmployee(employee.id);
+                                    setEmployees((prev) => prev.filter((emp) => emp.id !== employee.id));
+                                  } catch (err) {
+                                    console.error("Failed to remove employee:", err);
+                                  }
+                                }}
+                                className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition flex-shrink-0"
+                                title="Remove employee"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{employee.email}</p>
+                                <p className="text-xs text-gray-500 truncate">{employee.name}</p>
                               </div>
                               <select
                                 value={employee.role}
@@ -676,7 +731,7 @@ export default function Dashboard() {
                                     );
                                   }
                                 }}
-                                className="text-xs px-2 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50"
+                                className="text-xs px-2 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 flex-shrink-0"
                               >
                                 <option value="staff">Staff</option>
                                 <option value="admin">Admin</option>
@@ -1027,7 +1082,7 @@ export default function Dashboard() {
                               className="p-2 hover:bg-gray-200 rounded-lg transition"
                               title="More options"
                             >
-                              <MoreVertical className="w-5 h-5 text-gray-600" />
+                              <Menu className="w-5 h-5 text-gray-600" />
                             </button>
 
                             {openMenuDocId === doc.id && (
@@ -1463,10 +1518,6 @@ export default function Dashboard() {
                           Select status
                         </span>
                       )}
-                      <SelectValue
-                        className="hidden"
-                        placeholder="Select status"
-                      />
                     </SelectTrigger>
                     <SelectContent>
                       {statusOptions.map((option) => {
@@ -1516,27 +1567,38 @@ export default function Dashboard() {
                         key={file.id}
                         className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                       >
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
+                        <div className="flex-1 min-w-0 mr-2">
+                          <p className="text-sm font-medium text-gray-900 truncate">
                             {file.name}
                           </p>
                           <p className="text-xs text-gray-500">
                             Uploaded by {file.uploadedBy} on {file.uploadedAt}
                           </p>
                         </div>
-                        <a
-                          href={file.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <a href={file.url} target="_blank" rel="noopener noreferrer">
+                            <Button variant="outline" size="sm">
+                              <Download className="w-4 h-4" />
+                            </Button>
+                          </a>
                           <Button
-                            variant="outline"
+                            variant="destructive"
                             size="sm"
-                            className="flex gap-2"
+                            onClick={async () => {
+                              try {
+                                await deleteDocumentFile(file.id);
+                                const updated = await getDocuments();
+                                setDocuments(updated);
+                                const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                                if (refreshed) setSelectedDoc(refreshed);
+                              } catch (err: any) {
+                                console.error("Failed to delete file:", err);
+                              }
+                            }}
                           >
-                            <Download className="w-4 h-4" />
+                            <X className="w-4 h-4" />
                           </Button>
-                        </a>
+                        </div>
                       </div>
                     ))
                   )}
@@ -1571,39 +1633,66 @@ export default function Dashboard() {
                   )}
                 </div>
 
-                <Button
-                  disabled={!selectedFile || isUploading}
-                  onClick={async () => {
-                    if (!selectedFile) return;
-                    setIsUploading(true);
-                    setUploadError(null);
-                    try {
-                      await uploadFile(
-                        selectedDoc.id,
-                        selectedFile,
-                        user?.name || "User",
-                      );
-                      const updated = await getDocuments();
-                      setDocuments(updated);
-                      const refreshed = updated.find(
-                        (d) => d.id === selectedDoc.id,
-                      );
-                      if (refreshed) setSelectedDoc(refreshed);
+                {selectedFile && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
                       setSelectedFile(null);
                       if (fileInputRef.current) fileInputRef.current.value = "";
-                    } catch (err: any) {
-                      setUploadError(
-                        err.message ||
-                          "Upload failed. Make sure the backend server is running.",
-                      );
-                    } finally {
-                      setIsUploading(false);
-                    }
-                  }}
-                  className="w-full mt-3 bg-primary hover:bg-primary/90 text-white disabled:opacity-50"
-                >
-                  {isUploading ? "Uploading..." : "Upload File"}
-                </Button>
+                    }}
+                    className="mt-2 w-full text-gray-600"
+                  >
+                    Clear
+                  </Button>
+                )}
+
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                      setUploadError(null);
+                    }}
+                    className="flex-1 text-gray-600"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    disabled={!selectedFile || isUploading}
+                    onClick={async () => {
+                      if (!selectedFile) return;
+                      setIsUploading(true);
+                      setUploadError(null);
+                      try {
+                        await uploadFile(
+                          selectedDoc.id,
+                          selectedFile,
+                          user?.name || "User",
+                        );
+                        const updated = await getDocuments();
+                        setDocuments(updated);
+                        const refreshed = updated.find(
+                          (d) => d.id === selectedDoc.id,
+                        );
+                        if (refreshed) setSelectedDoc(refreshed);
+                        setSelectedFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      } catch (err: any) {
+                        setUploadError(
+                          err.message ||
+                            "Upload failed. Make sure the backend server is running.",
+                        );
+                      } finally {
+                        setIsUploading(false);
+                      }
+                    }}
+                    className="flex-1 bg-primary hover:bg-primary/90 text-white disabled:opacity-50"
+                  >
+                    {isUploading ? "Uploading..." : "Upload File"}
+                  </Button>
+                </div>
                 {uploadError && (
                   <p className="text-sm text-red-500 mt-2">{uploadError}</p>
                 )}
@@ -1795,7 +1884,7 @@ export default function Dashboard() {
                 {selectedDoc.id}
               </p>
             </div>
-            <div className="p-4 bg-white rounded-xl border-4 border-primary/20 shadow-inner">
+            <div id="qr-modal-svg" className="p-4 bg-white rounded-xl border-4 border-primary/20 shadow-inner">
               <QRCodeSVG
                 value={`${window.location.origin}/dashboard?doc=${selectedDoc.id}`}
                 size={260}
@@ -1811,6 +1900,13 @@ export default function Dashboard() {
                 {selectedDoc.status} · {selectedDoc.source}
               </p>
             </div>
+            <button
+              onClick={exportQrCode}
+              className="w-full py-2 rounded-lg bg-primary hover:bg-primary/90 text-white font-medium transition flex items-center justify-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Export QR Code
+            </button>
             <button
               onClick={() => setShowQrModal(false)}
               className="w-full py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition"

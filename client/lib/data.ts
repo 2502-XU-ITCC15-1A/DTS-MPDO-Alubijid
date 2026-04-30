@@ -29,6 +29,11 @@ export async function updateEmployeeRole(id: string, role: "admin" | "staff") {
   if (error) throw error;
 }
 
+export async function deleteEmployee(id: string) {
+  const { error } = await supabase.from("employees").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // ── Documents ─────────────────────────────────────────────────────────────────
 
 export async function getDocuments(): Promise<Document[]> {
@@ -160,6 +165,11 @@ export async function deleteDocument(id: string) {
   await supabase.from("audit_logs").delete().eq("document_id", id);
 
   const { error } = await supabase.from("documents").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteDocumentFile(fileId: string) {
+  const { error } = await supabase.from("document_files").delete().eq("id", fileId);
   if (error) throw error;
 }
 
