@@ -7,6 +7,7 @@ import { RoutingAction } from "@shared/api";
 
 interface DocumentWizardProps {
   onClose: () => void;
+  isSubmitting?: boolean;
   onSubmit: (formData: {
     title: string;
     documentType: string;
@@ -30,6 +31,7 @@ const defaultDocumentTypes = [
 export default function DocumentWizard({
   onClose,
   onSubmit,
+  isSubmitting = false,
 }: DocumentWizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -573,11 +575,23 @@ export default function DocumentWizard({
           ) : (
             <Button
               onClick={handleSubmit}
-              disabled={!isStep3Valid}
-              className={`bg-primary hover:bg-primary/90 text-white flex gap-2 ${!isStep3Valid ? "opacity-50 cursor-not-allowed" : ""}`}
+              disabled={!isStep3Valid || isSubmitting}
+              className={`bg-primary hover:bg-primary/90 text-white flex gap-2 ${(!isStep3Valid || isSubmitting) ? "opacity-50 cursor-not-allowed" : ""}`}
             >
-              <Upload className="w-4 h-4" />
-              Create Document
+              {isSubmitting ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  Create Document
+                </>
+              )}
             </Button>
           )}
         </div>

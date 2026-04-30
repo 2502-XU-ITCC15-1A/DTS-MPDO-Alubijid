@@ -170,6 +170,11 @@ export default function Dashboard() {
   const [uploadModalFile, setUploadModalFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [isMarkingDone, setIsMarkingDone] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
@@ -353,7 +358,8 @@ export default function Dashboard() {
   };
 
   const handleSaveEdits = async () => {
-    if (!selectedDoc) return;
+    if (!selectedDoc || isSaving) return;
+    setIsSaving(true);
 
     const newStatus = (editForm.status as Document["status"]) || selectedDoc.status;
     const actor = user?.name || "Admin";
@@ -396,6 +402,8 @@ export default function Dashboard() {
     } catch (err: any) {
       console.error("Failed to save edits:", err);
       toast.error(err.message || "Failed to save changes.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -510,8 +518,16 @@ export default function Dashboard() {
     );
   });
 
+  const isProcessing = isSaving || isSubmitting || isApproving || isMarkingDone || isDeleting || isUploading;
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Global loading bar */}
+      {isProcessing && (
+        <div className="fixed top-0 left-0 right-0 z-[100] h-1 bg-primary/20">
+          <div className="h-full bg-primary animate-[loading-bar_1.2s_ease-in-out_infinite]" />
+        </div>
+      )}
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -1058,10 +1074,18 @@ export default function Dashboard() {
                             e.stopPropagation();
                             handleSaveEdits();
                           }}
-                          className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-100 rounded transition"
-                          title="Save"
+                          disabled={isSaving}
+                          className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-100 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={isSaving ? "Saving..." : "Save"}
                         >
-                          <CheckCircle className="w-5 h-5" />
+                          {isSaving ? (
+                            <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                            </svg>
+                          ) : (
+                            <CheckCircle className="w-5 h-5" />
+                          )}
                         </button>
                       )}
 
@@ -1726,30 +1750,27 @@ export default function Dashboard() {
                 Cancel
               </Button>
               <Button
-                onClick={async (e) => {
-                  const btn = e.currentTarget;
-                  btn.disabled = true;
-                  btn.textContent = "Deleting...";
-                  if (deletingDocId) {
-                    try {
-                      await deleteDocument(deletingDocId);
-                      setDocuments((prev) => prev.filter((d) => d.id !== deletingDocId));
-                      toast.success("Document and all files deleted.");
-                    } catch (err: any) {
-                      console.error("Failed to delete document:", err);
-                      toast.error(err.message || "Failed to delete document.");
-                      btn.disabled = false;
-                      btn.textContent = "Delete";
-                      return;
-                    }
+                onClick={async () => {
+                  if (!deletingDocId || isDeleting) return;
+                  setIsDeleting(true);
+                  try {
+                    await deleteDocument(deletingDocId);
+                    setDocuments((prev) => prev.filter((d) => d.id !== deletingDocId));
+                    toast.success("Document and all files deleted.");
+                    setShowDeleteConfirm(false);
+                    setSelectedDoc(null);
+                    setDeletingDocId(null);
+                  } catch (err: any) {
+                    console.error("Failed to delete document:", err);
+                    toast.error(err.message || "Failed to delete document.");
+                  } finally {
+                    setIsDeleting(false);
                   }
-                  setShowDeleteConfirm(false);
-                  setSelectedDoc(null);
-                  setDeletingDocId(null);
                 }}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                disabled={isDeleting}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Delete
+                {isDeleting ? "Deleting..." : "Delete"}
               </Button>
             </div>
           </div>
@@ -1814,24 +1835,29 @@ export default function Dashboard() {
                 </Button>
                 <Button
                   onClick={async () => {
-                    if (selectedDoc) {
-                      try {
-                        await updateDocument(selectedDoc.id, { status: "Approved" });
-                        await addAuditLog(selectedDoc.id, "Document Approved", user?.name || "Admin", approvalRemarks || "Approved by admin");
-                        const updated = await getDocuments();
-                        setDocuments(updated);
-                        const refreshed = updated.find((d) => d.id === selectedDoc.id);
-                        if (refreshed) setSelectedDoc(refreshed);
-                      } catch (err) {
-                        console.error("Failed to approve document:", err);
-                      }
+                    if (!selectedDoc || isApproving) return;
+                    setIsApproving(true);
+                    try {
+                      await updateDocument(selectedDoc.id, { status: "Approved" });
+                      await addAuditLog(selectedDoc.id, "Document Approved", user?.name || "Admin", approvalRemarks || "Approved by admin");
+                      const updated = await getDocuments();
+                      setDocuments(updated);
+                      const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                      if (refreshed) setSelectedDoc(refreshed);
+                      toast.success("Document approved successfully.");
+                    } catch (err) {
+                      console.error("Failed to approve document:", err);
+                      toast.error("Failed to approve document.");
+                    } finally {
+                      setIsApproving(false);
+                      setShowApprovalWorkflow(false);
+                      setApprovalRemarks("");
                     }
-                    setShowApprovalWorkflow(false);
-                    setApprovalRemarks("");
                   }}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  disabled={isApproving}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Approve
+                  {isApproving ? "Approving..." : "Approve"}
                 </Button>
               </div>
             </div>
@@ -1859,22 +1885,27 @@ export default function Dashboard() {
               </p>
               <Button
                 onClick={async () => {
-                  if (selectedDoc) {
-                    try {
-                      await updateDocument(selectedDoc.id, { status: "Approved" });
-                      await addAuditLog(selectedDoc.id, "Marked as Done", user?.name || "Staff", `Returned to ${selectedDoc.source}`);
-                      const updated = await getDocuments();
-                      setDocuments(updated);
-                    } catch (err) {
-                      console.error("Failed to mark as done:", err);
-                    }
+                  if (!selectedDoc || isMarkingDone) return;
+                  setIsMarkingDone(true);
+                  try {
+                    await updateDocument(selectedDoc.id, { status: "Approved" });
+                    await addAuditLog(selectedDoc.id, "Marked as Done", user?.name || "Staff", `Returned to ${selectedDoc.source}`);
+                    const updated = await getDocuments();
+                    setDocuments(updated);
+                    toast.success("Document marked as done.");
+                  } catch (err) {
+                    console.error("Failed to mark as done:", err);
+                    toast.error("Failed to mark as done.");
+                  } finally {
+                    setIsMarkingDone(false);
+                    setShowDoneConfirm(false);
+                    setSelectedDoc(null);
                   }
-                  setShowDoneConfirm(false);
-                  setSelectedDoc(null);
                 }}
-                className="w-full bg-primary hover:bg-primary/90 text-white"
+                disabled={isMarkingDone}
+                className="w-full bg-primary hover:bg-primary/90 text-white disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Confirm
+                {isMarkingDone ? "Processing..." : "Confirm"}
               </Button>
             </div>
           </div>
@@ -1976,6 +2007,7 @@ export default function Dashboard() {
       {/* Document Wizard Modal */}
       {showUploadModal && (
         <DocumentWizard
+          isSubmitting={isSubmitting}
           onClose={() => {
             setShowUploadModal(false);
             setUploadFormData({
@@ -1989,6 +2021,8 @@ export default function Dashboard() {
             setRoutingRemarks("");
           }}
           onSubmit={async (wizardData) => {
+            if (isSubmitting) return;
+            setIsSubmitting(true);
             try {
               const dtn = await createDocument(
                 {
@@ -2024,6 +2058,9 @@ export default function Dashboard() {
               setDocuments(updated);
             } catch (err) {
               console.error("Failed to create document:", err);
+              toast.error("Failed to create document.");
+            } finally {
+              setIsSubmitting(false);
             }
             setShowUploadModal(false);
             setUploadFormData({

@@ -9,6 +9,7 @@ export default function Signup() {
   const [step, setStep] = useState<"verify" | "register">("verify");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  const [personalEmail, setPersonalEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -45,6 +46,8 @@ export default function Signup() {
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return setError("Please enter your full name.");
+    if (!personalEmail.trim()) return setError("Please enter your personal email.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personalEmail)) return setError("Please enter a valid personal email address.");
     if (password.length < 6) return setError("Password must be at least 6 characters.");
     if (password !== confirmPassword) return setError("Passwords do not match.");
     setError("");
@@ -53,7 +56,7 @@ export default function Signup() {
       const res = await fetch("/api/create-account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, name }),
+        body: JSON.stringify({ email, password, name, personalEmail }),
       });
       const data = await res.json();
       if (!res.ok) return setError(data.error || "Failed to create account.");
@@ -140,6 +143,22 @@ export default function Signup() {
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   required
                 />
+              </div>
+
+              {/* Personal Email */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Personal Email
+                </label>
+                <input
+                  type="email"
+                  value={personalEmail}
+                  onChange={(e) => setPersonalEmail(e.target.value)}
+                  placeholder="yourname@gmail.com"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">Used to receive OTP when resetting your password.</p>
               </div>
 
               {/* Password */}
