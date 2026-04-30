@@ -77,7 +77,11 @@ export async function getDocuments(): Promise<Document[]> {
         source: doc.source,
         destination: doc.destination,
         routingSlip: doc.routing_slip,
-        revisionComments: doc.revision_comments,
+        revisionComments:
+        doc.revision_comments ??
+        doc.routing_slip?.revision_comments ??
+        doc.routing_slip?.remarks ??
+        "",
         createdAt: doc.created_at,
         updatedAt: doc.updated_at,
         files: (files ?? []).map((f) => ({
@@ -274,8 +278,18 @@ export async function reviseDocument(
   comments: string,
   revisor: string,
 ) {
+  const { data: existingDoc, error: fetchError } = await supabase
+    .from("documents")
+    .select("assigned_to, routing_slip")
+    .eq("id", documentId)
+    .single();
+
+  if (fetchError || !existingDoc) {
+    throw fetchError || new Error("Document not found.");
+  }
+
   const mapped: Record<string, unknown> = {
-    status: "Pending",
+    status: "Needs revision",
     revision_comments: comments,
     updated_at: new Date().toISOString(),
   };
@@ -284,8 +298,39 @@ export async function reviseDocument(
     .from("documents")
     .update(mapped)
     .eq("id", documentId);
-  if (error) throw error;
 
+  if (error) {
+    const unknownColumnError =
+      error.message?.includes("revision_comments") ||
+      error.message?.includes("schema cache");
+
+    if (!unknownColumnError) {
+      throw error;
+    }
+
+    const fallbackRoutingSlip = {
+      ...(existingDoc.routing_slip || {}),
+      revision_comments: comments,
+    };
+
+    const { error: fallbackError } = await supabase
+      .from("documents")
+      .update({
+        status: "Needs revision",
+        routing_slip: fallbackRoutingSlip,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", documentId);
+
+    if (fallbackError) throw fallbackError;
+  }
+
+  await addAuditLog(
+    documentId,
+    "Revision requested",
+    revisor,
+    `Sent revision comments to ${existingDoc.assigned_to}`,
+  );
   await addAuditLog(
     documentId,
     "Document Revised",
