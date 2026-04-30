@@ -23,6 +23,9 @@ import {
   deleteDocument,
   addAuditLog,
   uploadFile,
+  sendDocumentForApproval,
+  approveDocument,
+  reviseDocument,
   locations,
   routingActionOptions,
 } from "@/lib/data";
@@ -78,6 +81,18 @@ const statusColors = {
     text: "text-red-700",
     icon: AlertCircle,
   },
+  "Sent for approval": {
+    bg: "bg-purple-50",
+    border: "border-purple-200",
+    text: "text-purple-700",
+    icon: HourglassIcon,
+  },
+  Completed: {
+    bg: "bg-green-50",
+    border: "border-green-200",
+    text: "text-green-700",
+    icon: CheckCircle,
+  },
 };
 
 const statusOptions = [
@@ -105,10 +120,22 @@ const statusOptions = [
     icon: AlertCircle,
     text: "text-red-700",
   },
+  {
+    value: "Sent for approval",
+    label: "Sent for Approval",
+    icon: HourglassIcon,
+    text: "text-purple-700",
+  },
+  {
+    value: "Completed",
+    label: "Completed",
+    icon: CheckCircle,
+    text: "text-green-700",
+  },
 ] as const;
 
 const getStatusDetails = (status: string) => {
-  if (status === "Approved" || status === "Released") {
+  if (status === "Approved" || status === "Released" || status === "Completed") {
     return statusOptions[2];
   }
   return (
@@ -209,6 +236,10 @@ export default function Dashboard() {
   );
   const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
   const [newSourceName, setNewSourceName] = useState("");
+  const [showRevisionModal, setShowRevisionModal] = useState(false);
+  const [revisionComments, setRevisionComments] = useState("");
+  const [isApprovingDoc, setIsApprovingDoc] = useState(false);
+  const [isRevisingDoc, setIsRevisingDoc] = useState(false);
 
   // Load employees and documents from Supabase on mount
   useEffect(() => {
@@ -515,9 +546,12 @@ export default function Dashboard() {
     processing: visibleDocuments.filter((d) => d.status === "Processing")
       .length,
     completed: visibleDocuments.filter(
-      (d) => d.status === "Approved" || d.status === "Released",
+      (d) => d.status === "Approved" || d.status === "Released" || d.status === "Completed",
     ).length,
     overdue: visibleDocuments.filter((d) => d.status === "Overdue").length,
+    sentForApproval: visibleDocuments.filter(
+      (d) => d.status === "Sent for approval",
+    ).length,
   };
 
   const avgResponseTime = "3.2 days";
@@ -694,7 +728,7 @@ export default function Dashboard() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
@@ -747,6 +781,20 @@ export default function Dashboard() {
               </div>
               <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
                 <AlertCircle className="w-6 h-6 text-red-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">Sent for Approval</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {stats.sentForApproval}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                <HourglassIcon className="w-6 h-6 text-purple-600" />
               </div>
             </div>
           </div>
@@ -1143,6 +1191,70 @@ export default function Dashboard() {
                           ) : (
                             <CheckCircle className="w-5 h-5" />
                           )}
+                        </button>
+                      )}
+
+                      {/* Approve button - only for documents sent for approval */}
+                      {selectedDoc.status === "Sent for approval" && docViewMode === "view" && (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setIsApprovingDoc(true);
+                            try {
+                              await approveDocument(selectedDoc.id, user?.name || "Admin");
+                              const updated = await getDocuments();
+                              setDocuments(updated);
+                              const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                              if (refreshed) setSelectedDoc(refreshed);
+                              toast.success("Document approved successfully.");
+                            } catch (err: any) {
+                              console.error("Failed to approve document:", err);
+                              toast.error(err.message || "Failed to approve document.");
+                            } finally {
+                              setIsApprovingDoc(false);
+                            }
+                          }}
+                          disabled={isApprovingDoc}
+                          className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-100 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={isApprovingDoc ? "Approving..." : "Approve"}
+                        >
+                          {isApprovingDoc ? (
+                            <svg
+                              className="w-5 h-5 animate-spin"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              />
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8v8z"
+                              />
+                            </svg>
+                          ) : (
+                            <CheckCircle className="w-5 h-5" />
+                          )}
+                        </button>
+                      )}
+
+                      {/* Revise button - only for documents sent for approval */}
+                      {selectedDoc.status === "Sent for approval" && docViewMode === "view" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowRevisionModal(true);
+                          }}
+                          className="p-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-100 rounded transition"
+                          title="Revise"
+                        >
+                          <Edit className="w-5 h-5" />
                         </button>
                       )}
 

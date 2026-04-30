@@ -35,7 +35,7 @@ export interface DocumentFile {
 }
 
 // Document status type
-export type DocumentStatus = "Pending" | "Processing" | "Approved" | "Released" | "Overdue";
+export type DocumentStatus = "Pending" | "Processing" | "Approved" | "Released" | "Overdue" | "Sent for approval" | "Completed";
 
 // Document type
 export type DocumentType = "Received" | "Assigned" | "Opened" | "Processed" | "Approved" | "Released";
@@ -73,6 +73,7 @@ export interface Document {
   files: DocumentFile[];
   history: AuditLogEntry[];
   routingSlip?: RoutingSlip; // Routing slip (digital routing sheet)
+  revisionComments?: string; // Comments from admin when revising document
   createdAt: string;
   updatedAt: string;
 }
