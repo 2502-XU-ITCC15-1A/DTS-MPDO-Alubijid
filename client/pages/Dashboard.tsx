@@ -1740,6 +1740,27 @@ export default function Dashboard() {
                 </div>
               )}
 
+              {/* Revision Comments - displayed when admin sends revisions */}
+              {selectedDoc.revisionComments && (
+                <div className="border-t pt-6">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0">
+                        <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-yellow-900 mb-2">
+                          Admin Comments for Revision
+                        </h4>
+                        <p className="text-yellow-800 text-sm whitespace-pre-wrap">
+                          {selectedDoc.revisionComments}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Document History */}
               <div className="border-t pt-6">
                 <h4 className="font-semibold text-gray-900 mb-4">
@@ -1769,13 +1790,34 @@ export default function Dashboard() {
 
               {/* Staff-only Done Button */}
               {user?.role === "staff" && (
-                <div className="border-t pt-6">
-                  <Button
-                    onClick={() => setShowDoneConfirm(true)}
-                    className="w-full bg-gray-400 hover:bg-gray-500 text-white font-semibold py-2"
-                  >
-                    Mark as Done
-                  </Button>
+                <div className="border-t pt-6 space-y-3">
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={async () => {
+                        if (!selectedDoc) return;
+                        try {
+                          await sendDocumentForApproval(selectedDoc.id, user?.name || "Staff");
+                          const updated = await getDocuments();
+                          setDocuments(updated);
+                          const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                          if (refreshed) setSelectedDoc(refreshed);
+                          toast.success("Document sent for admin approval.");
+                        } catch (err: any) {
+                          console.error("Failed to send for approval:", err);
+                          toast.error(err.message || "Failed to send for approval.");
+                        }
+                      }}
+                      className="flex-1 bg-primary hover:bg-primary/90 text-white font-semibold py-2"
+                    >
+                      Send for Admin Approval
+                    </Button>
+                    <Button
+                      onClick={() => setShowDoneConfirm(true)}
+                      className="flex-1 bg-gray-400 hover:bg-gray-500 text-white font-semibold py-2"
+                    >
+                      Mark as Done
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -2290,6 +2332,84 @@ export default function Dashboard() {
             setRoutingRemarks("");
           }}
         />
+      )}
+
+      {/* Revision Comments Modal */}
+      {showRevisionModal && selectedDoc && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full">
+            <div className="bg-yellow-100 border-l-4 border-yellow-500 p-6">
+              <h3 className="font-bold text-yellow-900 text-lg">
+                Revision Comments
+              </h3>
+              <p className="text-yellow-700 text-sm mt-2">
+                Document: <span className="font-semibold">{selectedDoc.title}</span>
+              </p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Comments for Staff
+                </label>
+                <textarea
+                  value={revisionComments}
+                  onChange={(e) => setRevisionComments(e.target.value)}
+                  placeholder="Enter revision comments that will be sent back to the staff..."
+                  rows={5}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 resize-none"
+                />
+              </div>
+
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-700">
+                  <span className="font-semibold">Note:</span> These comments will be displayed to the staff member with the document when it's sent back.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => {
+                    setShowRevisionModal(false);
+                    setRevisionComments("");
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (!revisionComments.trim() || !selectedDoc) {
+                      toast.error("Please enter revision comments.");
+                      return;
+                    }
+                    setIsRevisingDoc(true);
+                    try {
+                      await reviseDocument(selectedDoc.id, revisionComments, user?.name || "Admin");
+                      const updated = await getDocuments();
+                      setDocuments(updated);
+                      const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                      if (refreshed) setSelectedDoc(refreshed);
+                      toast.success("Document revised and sent back to staff.");
+                      setShowRevisionModal(false);
+                      setRevisionComments("");
+                    } catch (err: any) {
+                      console.error("Failed to revise document:", err);
+                      toast.error(err.message || "Failed to revise document.");
+                    } finally {
+                      setIsRevisingDoc(false);
+                    }
+                  }}
+                  disabled={isRevisingDoc}
+                  className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isRevisingDoc ? "Sending..." : "Send Revision"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
