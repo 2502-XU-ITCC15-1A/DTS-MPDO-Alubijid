@@ -226,7 +226,9 @@ export default function Dashboard() {
 
   const exportQrCode = () => {
     if (!selectedDoc) return;
-    const svg = document.querySelector("#qr-modal-svg svg") as SVGElement | null;
+    const svg = document.querySelector(
+      "#qr-modal-svg svg",
+    ) as SVGElement | null;
     if (!svg) return;
     const svgData = new XMLSerializer().serializeToString(svg);
     const canvas = document.createElement("canvas");
@@ -294,13 +296,18 @@ export default function Dashboard() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const toMarkOverdue = docs.filter((d) => {
-          if (!d.deadline || !["Pending", "Processing"].includes(d.status)) return false;
+          if (!d.deadline || !["Pending", "Processing"].includes(d.status))
+            return false;
           const dl = new Date(d.deadline);
           dl.setHours(0, 0, 0, 0);
           return dl < today;
         });
         if (toMarkOverdue.length > 0) {
-          await Promise.all(toMarkOverdue.map((d) => updateDocument(d.id, { status: "Overdue" })));
+          await Promise.all(
+            toMarkOverdue.map((d) =>
+              updateDocument(d.id, { status: "Overdue" }),
+            ),
+          );
           const refreshed = await getDocuments();
           setDocuments(refreshed);
         } else {
@@ -462,7 +469,8 @@ export default function Dashboard() {
     const actor = user?.name || "Admin";
 
     const resolvedDeadline = editForm.deadline || selectedDoc.deadline;
-    const resolvedStatus = (editForm.status as Document["status"]) || selectedDoc.status;
+    const resolvedStatus =
+      (editForm.status as Document["status"]) || selectedDoc.status;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const effectiveStatus: Document["status"] =
@@ -483,7 +491,12 @@ export default function Dashboard() {
 
       // Log every field that actually changed
       if (effectiveStatus !== selectedDoc.status) {
-        await addAuditLog(selectedDoc.id, "Status Updated", actor, `"${selectedDoc.status}" → "${effectiveStatus}"`);
+        await addAuditLog(
+          selectedDoc.id,
+          "Status Updated",
+          actor,
+          `"${selectedDoc.status}" → "${effectiveStatus}"`,
+        );
       }
       if (editForm.assignedTo !== selectedDoc.assignedTo) {
         const oldName =
@@ -727,11 +740,25 @@ export default function Dashboard() {
                         </div>
                         <div className="space-y-2 max-h-64 overflow-y-auto">
                           {employees.map((employee) => (
-                            <div key={employee.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded">
+                            <div
+                              key={employee.id}
+                              className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded"
+                            >
                               <button
-                                onClick={() => {
-                                  setEmployeeToDelete(employee);
-                                  setShowEmployeeDeleteConfirm(true);
+                                onClick={async () => {
+                                  try {
+                                    await deleteEmployee(employee.id);
+                                    setEmployees((prev) =>
+                                      prev.filter(
+                                        (emp) => emp.id !== employee.id,
+                                      ),
+                                    );
+                                  } catch (err) {
+                                    console.error(
+                                      "Failed to remove employee:",
+                                      err,
+                                    );
+                                  }
                                 }}
                                 className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition flex-shrink-0"
                                 title="Remove employee"
@@ -739,8 +766,12 @@ export default function Dashboard() {
                                 <X className="w-3.5 h-3.5" />
                               </button>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-900 truncate">{employee.email}</p>
-                                <p className="text-xs text-gray-500 truncate">{employee.name}</p>
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {employee.email}
+                                </p>
+                                <p className="text-xs text-gray-500 truncate">
+                                  {employee.name}
+                                </p>
                               </div>
                               <select
                                 value={employee.role}
@@ -1382,10 +1413,20 @@ export default function Dashboard() {
                         }
                       >
                         <option value="">Select Type</option>
-                        <option value="Infrastructure">Infrastructure</option>
-                        <option value="Planning">Planning</option>
-                        <option value="Development">Development</option>
-                        <option value="Environmental">Environmental</option>
+                        <option value="Communication-Letter">
+                          Communication Letter
+                        </option>
+                        <option value="Letter Request">Letter Request</option>
+                        <option value="Memorandum">Memorandum</option>
+                        <option value="Program of Works">
+                          Program of Works
+                        </option>
+                        <option value="Resolution">Resolution</option>
+                        <option value="Ordinance">Ordinance</option>
+                        <option value="Travel Order">Travel Order</option>
+                        <option value="Zoning, Certification, and Locational Clearance">
+                          Zoning, Certification, and Locational Clearance
+                        </option>
                         {customDocumentTypes.map((type) => (
                           <option key={type} value={type}>
                             {type}
@@ -1687,7 +1728,11 @@ export default function Dashboard() {
                           </p>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <a href={file.url} target="_blank" rel="noopener noreferrer">
+                          <a
+                            href={file.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
                             <Button variant="outline" size="sm">
                               <Download className="w-4 h-4" />
                             </Button>
@@ -1700,7 +1745,9 @@ export default function Dashboard() {
                                 await deleteDocumentFile(file.id);
                                 const updated = await getDocuments();
                                 setDocuments(updated);
-                                const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                                const refreshed = updated.find(
+                                  (d) => d.id === selectedDoc.id,
+                                );
                                 if (refreshed) setSelectedDoc(refreshed);
                               } catch (err: any) {
                                 console.error("Failed to delete file:", err);
@@ -1789,7 +1836,8 @@ export default function Dashboard() {
                         );
                         if (refreshed) setSelectedDoc(refreshed);
                         setSelectedFile(null);
-                        if (fileInputRef.current) fileInputRef.current.value = "";
+                        if (fileInputRef.current)
+                          fileInputRef.current.value = "";
                       } catch (err: any) {
                         setUploadError(
                           err.message ||
@@ -2037,7 +2085,10 @@ export default function Dashboard() {
                 {selectedDoc.id}
               </p>
             </div>
-            <div id="qr-modal-svg" className="p-4 bg-white rounded-xl border-4 border-primary/20 shadow-inner">
+            <div
+              id="qr-modal-svg"
+              className="p-4 bg-white rounded-xl border-4 border-primary/20 shadow-inner"
+            >
               <QRCodeSVG
                 value={`${window.location.origin}/dashboard?doc=${selectedDoc.id}`}
                 size={260}
