@@ -834,6 +834,7 @@ export default function Dashboard() {
                 />
               </div>
 
+              {/* Document Type Filter */}
               {/* Assignment Filter - admin only */}
               {user?.role === "admin" && (
                 <select
@@ -2059,10 +2060,18 @@ export default function Dashboard() {
                   }
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
                 >
-                  <option value="MPDC">MPDC</option>
-                  <option value="Planning Staff">Planning Staff</option>
-                  <option value="GIS Staff">GIS Staff</option>
-                  <option value="Technical Staff">Technical Staff</option>
+                  <option value="MPDC">
+                    Municipal Planning and Development Coordinator
+                  </option>
+                  <option value="ARIS">
+                    Administrative, Records, and IEC Section
+                  </option>
+                  <option value="PRDD">
+                    Plans, Research, and Development, Division
+                  </option>
+                  <option value="ZLURD">
+                    Zoning & Land Use Regulation Division
+                  </option>
                 </select>
               </div>
 
