@@ -1428,20 +1428,10 @@ export default function Dashboard() {
                         }
                       >
                         <option value="">Select Type</option>
-                        <option value="Communication-Letter">
-                          Communication Letter
-                        </option>
-                        <option value="Letter Request">Letter Request</option>
-                        <option value="Memorandum">Memorandum</option>
-                        <option value="Program of Works">
-                          Program of Works
-                        </option>
-                        <option value="Resolution">Resolution</option>
-                        <option value="Ordinance">Ordinance</option>
-                        <option value="Travel Order">Travel Order</option>
-                        <option value="Zoning, Certification, and Locational Clearance">
-                          Zoning, Certification, and Locational Clearance
-                        </option>
+                        <option value="Infrastructure">Infrastructure</option>
+                        <option value="Planning">Planning</option>
+                        <option value="Development">Development</option>
+                        <option value="Environmental">Environmental</option>
                         {customDocumentTypes.map((type) => (
                           <option key={type} value={type}>
                             {type}

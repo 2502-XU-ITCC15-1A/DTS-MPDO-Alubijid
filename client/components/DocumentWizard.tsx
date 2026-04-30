@@ -28,14 +28,10 @@ interface DocumentWizardProps {
 }
 
 const defaultDocumentTypes = [
-  "Communication Letter",
-  "Letter Request",
-  "Memorandum",
-  "Program of Works",
-  "Resolution",
-  "Ordinance",
-  "Travel Order",
-  "Zoning Certification and Locational Clearance",
+  "Infrastructure",
+  "Planning",
+  "Development",
+  "Environmental",
 ];
 
 export default function DocumentWizard({
