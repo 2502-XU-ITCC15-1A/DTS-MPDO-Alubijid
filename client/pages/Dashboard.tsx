@@ -755,9 +755,20 @@ export default function Dashboard() {
                               className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded"
                             >
                               <button
-                                onClick={() => {
-                                  setEmployeeToDelete(employee);
-                                  setShowEmployeeDeleteConfirm(true);
+                                onClick={async () => {
+                                  try {
+                                    await deleteEmployee(employee.id);
+                                    setEmployees((prev) =>
+                                      prev.filter(
+                                        (emp) => emp.id !== employee.id,
+                                      ),
+                                    );
+                                  } catch (err) {
+                                    console.error(
+                                      "Failed to remove employee:",
+                                      err,
+                                    );
+                                  }
                                 }}
                                 className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition flex-shrink-0"
                                 title="Remove employee"
@@ -1428,10 +1439,20 @@ export default function Dashboard() {
                         }
                       >
                         <option value="">Select Type</option>
-                        <option value="Infrastructure">Infrastructure</option>
-                        <option value="Planning">Planning</option>
-                        <option value="Development">Development</option>
-                        <option value="Environmental">Environmental</option>
+                        <option value="Communication-Letter">
+                          Communication Letter
+                        </option>
+                        <option value="Letter Request">Letter Request</option>
+                        <option value="Memorandum">Memorandum</option>
+                        <option value="Program of Works">
+                          Program of Works
+                        </option>
+                        <option value="Resolution">Resolution</option>
+                        <option value="Ordinance">Ordinance</option>
+                        <option value="Travel Order">Travel Order</option>
+                        <option value="Zoning, Certification, and Locational Clearance">
+                          Zoning, Certification, and Locational Clearance
+                        </option>
                         {customDocumentTypes.map((type) => (
                           <option key={type} value={type}>
                             {type}
