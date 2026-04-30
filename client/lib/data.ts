@@ -161,6 +161,11 @@ export async function deleteDocument(id: string) {
   if (error) throw error;
 }
 
+export async function deleteDocumentFile(fileId: string) {
+  const { error } = await supabase.from("document_files").delete().eq("id", fileId);
+  if (error) throw error;
+}
+
 export async function addDocumentFile(
   documentId: string,
   fileName: string,
