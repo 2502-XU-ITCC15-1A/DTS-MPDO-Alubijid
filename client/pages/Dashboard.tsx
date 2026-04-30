@@ -834,7 +834,6 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* Document Type Filter */}
               {/* Assignment Filter - admin only */}
               {user?.role === "admin" && (
                 <select
