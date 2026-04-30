@@ -139,6 +139,9 @@ const getStatusDetails = (status: string) => {
   );
 };
 
+const getStatusColor = (status: string) =>
+  statusColors[status as keyof typeof statusColors] ?? statusColors.Pending;
+
 const getStatusValue = (status: Document["status"]) =>
   status === "Released" ? "Approved" : status;
 
@@ -1057,8 +1060,7 @@ export default function Dashboard() {
               </div>
             ) : (
               filteredDocuments.map((doc) => {
-                const statusColor =
-                  statusColors[doc.status as keyof typeof statusColors];
+                const statusColor = getStatusColor(doc.status);
                 const StatusIcon = statusColor.icon;
                 const assignedEmployee = employees.find(
                   (e) => e.email === doc.assignedTo,

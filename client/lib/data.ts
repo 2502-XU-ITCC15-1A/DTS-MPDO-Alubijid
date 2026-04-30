@@ -48,7 +48,10 @@ export async function deleteEmployee(id: string) {
 // ── Documents ─────────────────────────────────────────────────────────────────
 
 export async function getDocuments(): Promise<Document[]> {
-  const { data: docs, error } = await supabase.from("documents").select("*");
+  const { data: docs, error } = await supabase
+    .from("documents")
+    .select("*")
+    .order("created_at", { ascending: false });
   if (error) throw error;
 
   const documents: Document[] = await Promise.all(
@@ -97,7 +100,11 @@ export async function getDocuments(): Promise<Document[]> {
     }),
   );
 
-  return documents;
+  return documents.sort((a, b) => {
+    const aTime = new Date(a.createdAt || a.submittedDate || a.timestamp).getTime();
+    const bTime = new Date(b.createdAt || b.submittedDate || b.timestamp).getTime();
+    return bTime - aTime;
+  });
 }
 
 export async function createDocument(
