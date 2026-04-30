@@ -130,6 +130,21 @@ const documentTypeFilters: DocumentType[] = [
   "Released",
 ];
 
+const designationOptionsByUnit: Record<string, string[]> = {
+  MPDC: ["Municipal Planning and Development Coordinator"],
+  ARIS: [
+    "Administrative Head / Overall Supervisor",
+    "Records / Monitoring Staff",
+  ],
+  PRDD: ["Statistician"],
+  ZLURD: [
+    "Division Head / Project Evaluator",
+    "Draftsman / Senior Technical Staff",
+    "GIS Specialist",
+    "Drone Pilot / Inspector",
+  ],
+};
+
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -226,12 +241,13 @@ export default function Dashboard() {
   const [newEmployeeData, setNewEmployeeData] = useState({
     name: "",
     unit: "MPDC",
+    designation: designationOptionsByUnit.MPDC[0],
   });
   const [customDocumentTypes, setCustomDocumentTypes] = useState<string[]>(() =>
-    JSON.parse(localStorage.getItem("customDocumentTypes") || "[]")
+    JSON.parse(localStorage.getItem("customDocumentTypes") || "[]"),
   );
   const [customSources, setCustomSources] = useState<string[]>(() =>
-    JSON.parse(localStorage.getItem("customSources") || "[]")
+    JSON.parse(localStorage.getItem("customSources") || "[]"),
   );
   const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
   const [newSourceName, setNewSourceName] = useState("");
@@ -384,13 +400,17 @@ export default function Dashboard() {
         email,
         name: newEmployeeData.name,
         role: "staff",
-        department: newEmployeeData.unit,
+        department: newEmployeeData.designation,
       });
       setEmployees([...employees, newEmployee]);
     } catch (err) {
       console.error("Failed to add employee:", err);
     }
-    setNewEmployeeData({ name: "", unit: "MPDC" });
+    setNewEmployeeData({
+      name: "",
+      unit: "MPDC",
+      designation: designationOptionsByUnit.MPDC[0],
+    });
     setShowAddEmployeeModal(false);
   };
 
@@ -403,7 +423,8 @@ export default function Dashboard() {
     if (!selectedDoc || isSaving) return;
     setIsSaving(true);
 
-    const newStatus = (editForm.status as Document["status"]) || selectedDoc.status;
+    const newStatus =
+      (editForm.status as Document["status"]) || selectedDoc.status;
     const actor = user?.name || "Admin";
 
     const resolvedDeadline = editForm.deadline || selectedDoc.deadline;
@@ -431,18 +452,41 @@ export default function Dashboard() {
         await addAuditLog(selectedDoc.id, "Status Updated", actor, `"${selectedDoc.status}" → "${effectiveStatus}"`);
       }
       if (editForm.assignedTo !== selectedDoc.assignedTo) {
-        const oldName = employees.find((e) => e.email === selectedDoc.assignedTo)?.name || selectedDoc.assignedTo;
-        const newName = employees.find((e) => e.email === editForm.assignedTo)?.name || editForm.assignedTo;
-        await addAuditLog(selectedDoc.id, "Reassigned", actor, `"${oldName}" → "${newName}"`);
+        const oldName =
+          employees.find((e) => e.email === selectedDoc.assignedTo)?.name ||
+          selectedDoc.assignedTo;
+        const newName =
+          employees.find((e) => e.email === editForm.assignedTo)?.name ||
+          editForm.assignedTo;
+        await addAuditLog(
+          selectedDoc.id,
+          `Reassigned from ${oldName} to ${newName}`,
+          actor,
+        );
       }
       if (editForm.source !== selectedDoc.source) {
-        await addAuditLog(selectedDoc.id, "Source Updated", actor, `"${selectedDoc.source}" → "${editForm.source}"`);
+        await addAuditLog(
+          selectedDoc.id,
+          "Source Updated",
+          actor,
+          `"${selectedDoc.source}" → "${editForm.source}"`,
+        );
       }
       if (editForm.deadline !== selectedDoc.deadline) {
-        await addAuditLog(selectedDoc.id, "Deadline Updated", actor, `"${selectedDoc.deadline}" → "${editForm.deadline}"`);
+        await addAuditLog(
+          selectedDoc.id,
+          "Deadline Updated",
+          actor,
+          `"${selectedDoc.deadline}" → "${editForm.deadline}"`,
+        );
       }
       if ((editForm.destination || "") !== (selectedDoc.destination || "")) {
-        await addAuditLog(selectedDoc.id, "Destination Updated", actor, `"${selectedDoc.destination || "None"}" → "${editForm.destination || "None"}"`);
+        await addAuditLog(
+          selectedDoc.id,
+          "Destination Updated",
+          actor,
+          `"${selectedDoc.destination || "None"}" → "${editForm.destination || "None"}"`,
+        );
       }
 
       // Refresh from DB so the audit log section shows the new entries immediately
@@ -468,7 +512,12 @@ export default function Dashboard() {
       const doc = documents.find((d) => d.id === docId);
       const oldStatus = doc?.status || "";
       await updateDocument(docId, { status: value });
-      await addAuditLog(docId, "Status Updated", user?.name || "Admin", `"${oldStatus}" → "${value}"`);
+      await addAuditLog(
+        docId,
+        "Status Updated",
+        user?.name || "Admin",
+        `"${oldStatus}" → "${value}"`,
+      );
       setDocuments((prev) =>
         prev.map((doc) =>
           doc.id === docId
@@ -543,9 +592,13 @@ export default function Dashboard() {
 
   // Filter by search (DTN or document name), document type, assignment, and deadline
   const filteredDocuments = visibleDocuments.filter((doc) => {
-    const matchesSearch = doc.id.toLowerCase().includes(searchQuery.toLowerCase()) || doc.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesDocType = selectedFilter === "all" || doc.documentType === selectedFilter;
-    const matchesAssignment = filterAssignedTo === "all" || doc.assignedTo === filterAssignedTo;
+    const matchesSearch =
+      doc.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesDocType =
+      selectedFilter === "all" || doc.documentType === selectedFilter;
+    const matchesAssignment =
+      filterAssignedTo === "all" || doc.assignedTo === filterAssignedTo;
 
     let matchesDeadline = true;
     if (filterDeadline !== "all") {
@@ -571,7 +624,13 @@ export default function Dashboard() {
     );
   });
 
-  const isProcessing = isSaving || isSubmitting || isApproving || isMarkingDone || isDeleting || isUploading;
+  const isProcessing =
+    isSaving ||
+    isSubmitting ||
+    isApproving ||
+    isMarkingDone ||
+    isDeleting ||
+    isUploading;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -883,7 +942,6 @@ export default function Dashboard() {
                   <option value="upcoming">Upcoming</option>
                 </select>
               )}
-
             </div>
           </div>
 
@@ -1139,9 +1197,24 @@ export default function Dashboard() {
                           title={isSaving ? "Saving..." : "Save"}
                         >
                           {isSaving ? (
-                            <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                            <svg
+                              className="w-5 h-5 animate-spin"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              />
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8v8z"
+                              />
                             </svg>
                           ) : (
                             <CheckCircle className="w-5 h-5" />
@@ -1182,13 +1255,20 @@ export default function Dashboard() {
               {/* Key Information Grid */}
               <div className="grid grid-cols-3 gap-4 items-start">
                 <div>
-                  <p className="text-xs text-gray-500 uppercase font-semibold">Type</p>
+                  <p className="text-xs text-gray-500 uppercase font-semibold">
+                    Type
+                  </p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <div className="mt-1">
                       <select
                         className="text-base font-medium text-gray-900 px-2 py-1 border border-gray-300 rounded w-full"
                         value={editForm.documentType || ""}
-                        onChange={(e) => setEditForm({ ...editForm, documentType: e.target.value })}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            documentType: e.target.value,
+                          })
+                        }
                       >
                         <option value="">Select Type</option>
                         <option value="Infrastructure">Infrastructure</option>
@@ -1196,7 +1276,9 @@ export default function Dashboard() {
                         <option value="Development">Development</option>
                         <option value="Environmental">Environmental</option>
                         {customDocumentTypes.map((type) => (
-                          <option key={type} value={type}>{type}</option>
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
                         ))}
                         <option value="Others">Others</option>
                       </select>
@@ -1205,7 +1287,9 @@ export default function Dashboard() {
                           <input
                             type="text"
                             value={newDocumentTypeName}
-                            onChange={(e) => setNewDocumentTypeName(e.target.value)}
+                            onChange={(e) =>
+                              setNewDocumentTypeName(e.target.value)
+                            }
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 handleAddCustomDocumentType();
@@ -1225,7 +1309,9 @@ export default function Dashboard() {
                       )}
                     </div>
                   ) : (
-                    <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.type}</p>
+                    <p className="text-lg font-medium text-gray-900 mt-1">
+                      {selectedDoc.type}
+                    </p>
                   )}
                 </div>
                 <div>
@@ -1237,13 +1323,19 @@ export default function Dashboard() {
                       <select
                         className="text-base font-medium text-gray-900 px-2 py-1 border border-gray-300 rounded w-full"
                         value={editForm.source || ""}
-                        onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, source: e.target.value })
+                        }
                       >
                         {locations.map((loc) => (
-                          <option key={loc} value={loc}>{loc}</option>
+                          <option key={loc} value={loc}>
+                            {loc}
+                          </option>
                         ))}
                         {customSources.map((src) => (
-                          <option key={src} value={src}>{src}</option>
+                          <option key={src} value={src}>
+                            {src}
+                          </option>
                         ))}
                         <option value="Others">Others</option>
                       </select>
@@ -1856,7 +1948,9 @@ export default function Dashboard() {
                   setIsDeleting(true);
                   try {
                     await deleteDocument(deletingDocId);
-                    setDocuments((prev) => prev.filter((d) => d.id !== deletingDocId));
+                    setDocuments((prev) =>
+                      prev.filter((d) => d.id !== deletingDocId),
+                    );
                     toast.success("Document and all files deleted.");
                     setShowDeleteConfirm(false);
                     setSelectedDoc(null);
@@ -1939,11 +2033,20 @@ export default function Dashboard() {
                     if (!selectedDoc || isApproving) return;
                     setIsApproving(true);
                     try {
-                      await updateDocument(selectedDoc.id, { status: "Approved" });
-                      await addAuditLog(selectedDoc.id, "Document Approved", user?.name || "Admin", approvalRemarks || "Approved by admin");
+                      await updateDocument(selectedDoc.id, {
+                        status: "Approved",
+                      });
+                      await addAuditLog(
+                        selectedDoc.id,
+                        "Document Approved",
+                        user?.name || "Admin",
+                        approvalRemarks || "Approved by admin",
+                      );
                       const updated = await getDocuments();
                       setDocuments(updated);
-                      const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                      const refreshed = updated.find(
+                        (d) => d.id === selectedDoc.id,
+                      );
                       if (refreshed) setSelectedDoc(refreshed);
                       toast.success("Document approved successfully.");
                     } catch (err) {
@@ -1989,8 +2092,15 @@ export default function Dashboard() {
                   if (!selectedDoc || isMarkingDone) return;
                   setIsMarkingDone(true);
                   try {
-                    await updateDocument(selectedDoc.id, { status: "Approved" });
-                    await addAuditLog(selectedDoc.id, "Marked as Done", user?.name || "Staff", `Returned to ${selectedDoc.source}`);
+                    await updateDocument(selectedDoc.id, {
+                      status: "Approved",
+                    });
+                    await addAuditLog(
+                      selectedDoc.id,
+                      "Marked as Done",
+                      user?.name || "Staff",
+                      `Returned to ${selectedDoc.source}`,
+                    );
                     const updated = await getDocuments();
                     setDocuments(updated);
                     toast.success("Document marked as done.");
@@ -2062,14 +2172,48 @@ export default function Dashboard() {
                     setNewEmployeeData({
                       ...newEmployeeData,
                       unit: e.target.value,
+                      designation:
+                        designationOptionsByUnit[e.target.value]?.[0] || "",
                     })
                   }
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
                 >
-                  <option value="MPDC">MPDC</option>
-                  <option value="Planning Staff">Planning Staff</option>
-                  <option value="GIS Staff">GIS Staff</option>
-                  <option value="Technical Staff">Technical Staff</option>
+                  <option value="MPDC">
+                    Municipal Planning and Development Coordinator
+                  </option>
+                  <option value="ARIS">
+                    Administrative, Records, and IEC Section
+                  </option>
+                  <option value="PRDD">
+                    Plans, Research, and Development, Division
+                  </option>
+                  <option value="ZLURD">
+                    Zoning & Land Use Regulation Division
+                  </option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Designation
+                </label>
+                <select
+                  value={newEmployeeData.designation}
+                  onChange={(e) =>
+                    setNewEmployeeData({
+                      ...newEmployeeData,
+                      designation: e.target.value,
+                    })
+                  }
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
+                >
+                  {designationOptionsByUnit[newEmployeeData.unit]?.map(
+                    (designation) => (
+                      <option key={designation} value={designation}>
+                        {designation}
+                      </option>
+                    ),
+                  )}
                 </select>
               </div>
 
@@ -2085,7 +2229,11 @@ export default function Dashboard() {
                 <Button
                   onClick={() => {
                     setShowAddEmployeeModal(false);
-                    setNewEmployeeData({ name: "", unit: "MPDC" });
+                    setNewEmployeeData({
+                      name: "",
+                      unit: "MPDC",
+                      designation: designationOptionsByUnit.MPDC[0],
+                    });
                   }}
                   variant="outline"
                   className="flex-1"
@@ -2125,6 +2273,13 @@ export default function Dashboard() {
             if (isSubmitting) return;
             setIsSubmitting(true);
             try {
+              // Get the name of the assigned staff member
+              const assignedStaff = employees.find(
+                (e) => e.email === wizardData.assignedTo,
+              );
+              const assignedToName =
+                assignedStaff?.name || wizardData.assignedTo;
+
               const dtn = await createDocument(
                 {
                   id: "",
@@ -2137,13 +2292,16 @@ export default function Dashboard() {
                   assignedTo: wizardData.assignedTo,
                   deadline: wizardData.deadline,
                   source: wizardData.source,
-                  ...(wizardData.documentDirection === "Outgoing" && { destination: "LGU Office" }),
+                  ...(wizardData.documentDirection === "Outgoing" && {
+                    destination: "LGU Office",
+                  }),
                   createdAt: new Date().toISOString(),
                   updatedAt: new Date().toISOString(),
                 },
                 wizardData.routingActions,
                 wizardData.routingRemarks,
                 user?.name || "Admin",
+                assignedToName,
               );
 
               // Upload attached file to Google Drive under the new document
