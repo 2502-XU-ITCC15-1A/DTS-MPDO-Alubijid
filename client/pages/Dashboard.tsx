@@ -256,6 +256,7 @@ export default function Dashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadModalFileInputRef = useRef<HTMLInputElement>(null);
   const [editForm, setEditForm] = useState<{
+    title: string;
     documentType: string;
     source: string;
     assignedTo: string;
@@ -263,6 +264,7 @@ export default function Dashboard() {
     deadline: string;
     destination: string;
   }>({
+    title: "",
     documentType: "",
     source: "",
     assignedTo: "",
@@ -332,6 +334,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (selectedDoc) {
       setEditForm({
+        title: selectedDoc.title || "",
         source: selectedDoc.source || "",
         assignedTo: selectedDoc.assignedTo || "",
         status: selectedDoc.status || "",
@@ -482,6 +485,7 @@ export default function Dashboard() {
 
     try {
       await updateDocument(selectedDoc.id, {
+        title: editForm.title || selectedDoc.title,
         status: effectiveStatus,
         assignedTo: editForm.assignedTo,
         source: editForm.source,
@@ -490,6 +494,14 @@ export default function Dashboard() {
       });
 
       // Log every field that actually changed
+      if (editForm.title && editForm.title !== selectedDoc.title) {
+        await addAuditLog(
+          selectedDoc.id,
+          "Title Updated",
+          actor,
+          `"${selectedDoc.title}" → "${editForm.title}"`,
+        );
+      }
       if (effectiveStatus !== selectedDoc.status) {
         await addAuditLog(
           selectedDoc.id,
@@ -1235,7 +1247,18 @@ export default function Dashboard() {
             <div className="sticky top-0 bg-gradient-to-r from-primary to-secondary text-white p-6">
               <div className="flex justify-between items-start">
                 <div>
-                  <h3 className="text-2xl font-bold">{selectedDoc.title}</h3>
+                  {user?.role === "admin" && docViewMode === "edit" ? (
+                    <input
+                      className="text-2xl font-bold bg-white/20 text-white placeholder-white/60 rounded px-2 py-0.5 w-full outline-none border border-white/40 focus:border-white"
+                      value={editForm.title}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, title: e.target.value })
+                      }
+                      placeholder="Document name"
+                    />
+                  ) : (
+                    <h3 className="text-2xl font-bold">{selectedDoc.title}</h3>
+                  )}
                   <p className="text-white/80 text-sm mt-1">{selectedDoc.id}</p>
                   {user?.role === "admin" && (
                     <p className="text-white/70 text-xs mt-2">
