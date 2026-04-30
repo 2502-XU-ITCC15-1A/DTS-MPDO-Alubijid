@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, ChevronLeft, ChevronRight, Trash2, CheckCircle } from "lucide-react";
+import {
+  Upload,
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
+  CheckCircle,
+} from "lucide-react";
 // import { mockEmployees, locations, routingActionOptions } from "@/lib/data";
 import { getEmployees, locations, routingActionOptions } from "@/lib/data";
 import { RoutingAction } from "@shared/api";
@@ -55,6 +61,9 @@ export default function DocumentWizard({
       role: string;
     }[]
   >([]);
+  const [validationErrors, setValidationErrors] = useState<Set<string>>(
+    new Set(),
+  );
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -82,19 +91,42 @@ export default function DocumentWizard({
   }, []);
 
   const handleNext = () => {
+    const errors = new Set<string>();
+
+    if (currentStep === 1) {
+      if (!formData.title) errors.add("title");
+      if (!formData.documentType) errors.add("documentType");
+      if (!formData.source) errors.add("source");
+      if (!formData.deadline) errors.add("deadline");
+    }
+
+    if (currentStep === 2) {
+      if (!formData.assignedTo) errors.add("assignedTo");
+    }
+
+    if (errors.size > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+
+    setValidationErrors(new Set());
     if (currentStep < 3) {
       setCurrentStep(currentStep + 1);
     }
   };
 
   const handleBack = () => {
+    setValidationErrors(new Set());
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
     }
   };
 
   const handleAddCustomDocumentType = () => {
-    if (newDocumentTypeName.trim() && !customDocumentTypes.includes(newDocumentTypeName.trim())) {
+    if (
+      newDocumentTypeName.trim() &&
+      !customDocumentTypes.includes(newDocumentTypeName.trim())
+    ) {
       const updated = [...customDocumentTypes, newDocumentTypeName.trim()];
       setCustomDocumentTypes(updated);
       localStorage.setItem("customDocumentTypes", JSON.stringify(updated));
@@ -184,29 +216,50 @@ export default function DocumentWizard({
               </h4>
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Document Title
+                  Document Title <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.title}
-                  onChange={(e) =>
-                    setFormData({ ...formData, title: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setFormData({ ...formData, title: e.target.value });
+                    if (e.target.value && validationErrors.has("title")) {
+                      const newErrors = new Set(validationErrors);
+                      newErrors.delete("title");
+                      setValidationErrors(newErrors);
+                    }
+                  }}
                   placeholder="Enter document title"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
+                    validationErrors.has("title")
+                      ? "border-red-500 focus:ring-red-500"
+                      : "border-gray-300 focus:ring-primary"
+                  }`}
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Document Type
+                  Document Type <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={formData.documentType}
-                  onChange={(e) =>
-                    setFormData({ ...formData, documentType: e.target.value })
-                  }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
+                  onChange={(e) => {
+                    setFormData({ ...formData, documentType: e.target.value });
+                    if (
+                      e.target.value &&
+                      validationErrors.has("documentType")
+                    ) {
+                      const newErrors = new Set(validationErrors);
+                      newErrors.delete("documentType");
+                      setValidationErrors(newErrors);
+                    }
+                  }}
+                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 bg-white ${
+                    validationErrors.has("documentType")
+                      ? "border-red-500 focus:ring-red-500"
+                      : "border-gray-300 focus:ring-primary"
+                  }`}
                 >
                   <option value="">Select Type</option>
                   {defaultDocumentTypes.map((type) => (
@@ -248,14 +301,23 @@ export default function DocumentWizard({
 
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Source
+                  Source <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={formData.source}
-                  onChange={(e) =>
-                    setFormData({ ...formData, source: e.target.value })
-                  }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
+                  onChange={(e) => {
+                    setFormData({ ...formData, source: e.target.value });
+                    if (e.target.value && validationErrors.has("source")) {
+                      const newErrors = new Set(validationErrors);
+                      newErrors.delete("source");
+                      setValidationErrors(newErrors);
+                    }
+                  }}
+                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 bg-white ${
+                    validationErrors.has("source")
+                      ? "border-red-500 focus:ring-red-500"
+                      : "border-gray-300 focus:ring-primary"
+                  }`}
                 >
                   <option value="">Select Source</option>
                   {locations.map((loc) => (
@@ -318,15 +380,24 @@ export default function DocumentWizard({
 
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Deadline
+                  Deadline <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="date"
                   value={formData.deadline}
-                  onChange={(e) =>
-                    setFormData({ ...formData, deadline: e.target.value })
-                  }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  onChange={(e) => {
+                    setFormData({ ...formData, deadline: e.target.value });
+                    if (e.target.value && validationErrors.has("deadline")) {
+                      const newErrors = new Set(validationErrors);
+                      newErrors.delete("deadline");
+                      setValidationErrors(newErrors);
+                    }
+                  }}
+                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
+                    validationErrors.has("deadline")
+                      ? "border-red-500 focus:ring-red-500"
+                      : "border-gray-300 focus:ring-primary"
+                  }`}
                 />
               </div>
 
@@ -369,7 +440,10 @@ export default function DocumentWizard({
                 {/* Clear selection */}
                 {selectedFile && (
                   <Button
-                    onClick={(e) => { e.stopPropagation(); setSelectedFile(null); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedFile(null);
+                    }}
                     variant="destructive"
                     size="sm"
                     className="mt-2 flex items-center gap-1"
@@ -391,14 +465,23 @@ export default function DocumentWizard({
 
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Assign To Staff Member
+                  Assign To Staff Member <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={formData.assignedTo}
-                  onChange={(e) =>
-                    setFormData({ ...formData, assignedTo: e.target.value })
-                  }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
+                  onChange={(e) => {
+                    setFormData({ ...formData, assignedTo: e.target.value });
+                    if (e.target.value && validationErrors.has("assignedTo")) {
+                      const newErrors = new Set(validationErrors);
+                      newErrors.delete("assignedTo");
+                      setValidationErrors(newErrors);
+                    }
+                  }}
+                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 bg-white ${
+                    validationErrors.has("assignedTo")
+                      ? "border-red-500 focus:ring-red-500"
+                      : "border-gray-300 focus:ring-primary"
+                  }`}
                 >
                   <option value="">Select Staff Member</option>
                   {employees
@@ -576,13 +659,28 @@ export default function DocumentWizard({
             <Button
               onClick={handleSubmit}
               disabled={!isStep3Valid || isSubmitting}
-              className={`bg-primary hover:bg-primary/90 text-white flex gap-2 ${(!isStep3Valid || isSubmitting) ? "opacity-50 cursor-not-allowed" : ""}`}
+              className={`bg-primary hover:bg-primary/90 text-white flex gap-2 ${!isStep3Valid || isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
             >
               {isSubmitting ? (
                 <>
-                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  <svg
+                    className="w-4 h-4 animate-spin"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v8z"
+                    />
                   </svg>
                   Creating...
                 </>
