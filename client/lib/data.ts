@@ -88,6 +88,7 @@ export async function createDocument(
   routingActions: RoutingAction[],
   routingRemarks: string,
   createdBy: string,
+  assignedToName?: string,
 ): Promise<string> {
   const now = new Date().toISOString();
   const dtn = `DTN-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
@@ -110,7 +111,11 @@ export async function createDocument(
   });
   if (error) throw error;
 
-  await addAuditLog(dtn, "Received", createdBy);
+  // Create initial audit logs
+  await addAuditLog(dtn, "Document Created", createdBy);
+  if (doc.assignedTo && assignedToName) {
+    await addAuditLog(dtn, `Assigned to ${assignedToName}`, createdBy);
+  }
   return dtn;
 }
 
@@ -142,7 +147,9 @@ export async function updateDocument(
 
 export async function deleteDocument(id: string) {
   // Delete the Google Drive folder and all files inside it
-  const driveRes = await fetch(`/api/delete-folder/${encodeURIComponent(id)}`, { method: "DELETE" });
+  const driveRes = await fetch(`/api/delete-folder/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
   if (!driveRes.ok) {
     const err = await driveRes.json().catch(() => ({}));
     throw new Error(err.error || "Failed to delete files from Google Drive");
