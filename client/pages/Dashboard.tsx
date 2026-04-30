@@ -203,6 +203,9 @@ export default function Dashboard() {
   const [docViewMode, setDocViewMode] = useState<"view" | "edit">("view");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [showEmployeeDeleteConfirm, setShowEmployeeDeleteConfirm] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
+  const [isDeletingEmployee, setIsDeletingEmployee] = useState(false);
   const [showApprovalWorkflow, setShowApprovalWorkflow] = useState(false);
   const [approvalRemarks, setApprovalRemarks] = useState("");
   const [filterAssignedTo, setFilterAssignedTo] = useState<string>("all");
@@ -726,13 +729,9 @@ export default function Dashboard() {
                           {employees.map((employee) => (
                             <div key={employee.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded">
                               <button
-                                onClick={async () => {
-                                  try {
-                                    await deleteEmployee(employee.id);
-                                    setEmployees((prev) => prev.filter((emp) => emp.id !== employee.id));
-                                  } catch (err) {
-                                    console.error("Failed to remove employee:", err);
-                                  }
+                                onClick={() => {
+                                  setEmployeeToDelete(employee);
+                                  setShowEmployeeDeleteConfirm(true);
                                 }}
                                 className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition flex-shrink-0"
                                 title="Remove employee"
@@ -2025,6 +2024,56 @@ export default function Dashboard() {
             >
               Close
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Employee Confirmation Modal */}
+      {showEmployeeDeleteConfirm && employeeToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full">
+            <div className="bg-red-100 border-l-4 border-red-500 p-6">
+              <h3 className="font-bold text-red-900 text-lg">Delete Employee</h3>
+              <p className="text-red-700 text-sm mt-2">
+                Are you sure you want to remove {employeeToDelete.name} ({employeeToDelete.email})?
+                This will also delete their Supabase authentication account.
+              </p>
+            </div>
+
+            <div className="p-6 flex gap-3">
+              <Button
+                onClick={() => {
+                  setShowEmployeeDeleteConfirm(false);
+                  setEmployeeToDelete(null);
+                }}
+                variant="outline"
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!employeeToDelete || isDeletingEmployee) return;
+                  setIsDeletingEmployee(true);
+                  try {
+                    await deleteEmployee(employeeToDelete.id);
+                    setEmployees((prev) => prev.filter((emp) => emp.id !== employeeToDelete.id));
+                    toast.success("Employee deleted and auth record removed.");
+                  } catch (err: any) {
+                    console.error("Failed to delete employee:", err);
+                    toast.error(err?.message || "Failed to delete employee.");
+                  } finally {
+                    setIsDeletingEmployee(false);
+                    setShowEmployeeDeleteConfirm(false);
+                    setEmployeeToDelete(null);
+                  }
+                }}
+                className="flex-1"
+                disabled={isDeletingEmployee}
+              >
+                {isDeletingEmployee ? "Deleting..." : "Delete"}
+              </Button>
+            </div>
           </div>
         </div>
       )}

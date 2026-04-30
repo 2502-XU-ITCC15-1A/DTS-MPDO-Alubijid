@@ -30,8 +30,19 @@ export async function updateEmployeeRole(id: string, role: "admin" | "staff") {
 }
 
 export async function deleteEmployee(id: string) {
-  const { error } = await supabase.from("employees").delete().eq("id", id);
-  if (error) throw error;
+  const response = await fetch(`/api/delete-employee/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error || "Failed to delete employee.");
+  }
+
+  return response.json();
 }
 
 // ── Documents ─────────────────────────────────────────────────────────────────

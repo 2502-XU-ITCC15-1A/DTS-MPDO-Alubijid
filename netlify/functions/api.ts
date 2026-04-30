@@ -74,6 +74,46 @@ app.post("/api/create-account", async (req, res) => {
   res.json({ success: true });
 });
 
+// Delete employee record and auth user by employee id
+app.delete("/api/delete-employee/:id", async (req, res) => {
+  const { id } = req.params;
+  if (!id) return res.status(400).json({ error: "Employee ID required." });
+
+  const { data: employee, error: empError } = await supabaseAdmin
+    .from("employees")
+    .select("email")
+    .eq("id", id)
+    .single();
+
+  if (empError || !employee) {
+    return res.status(404).json({ error: empError?.message || "Employee not found." });
+  }
+
+  const { data: userList, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
+  if (listErr) {
+    return res.status(500).json({ error: "Failed to look up auth users." });
+  }
+
+  const authUser = userList.users?.find((user) => user.email === employee.email);
+  if (authUser) {
+    const { error: deleteErr } = await supabaseAdmin.auth.admin.deleteUser(authUser.id);
+    if (deleteErr) {
+      return res.status(500).json({ error: deleteErr.message });
+    }
+  }
+
+  const { error: deleteEmployeeError } = await supabaseAdmin
+    .from("employees")
+    .delete()
+    .eq("id", id);
+
+  if (deleteEmployeeError) {
+    return res.status(500).json({ error: deleteEmployeeError.message });
+  }
+
+  res.json({ success: true });
+});
+
 // Get or create a subfolder by document ID in Google Drive
 async function getOrCreateFolder(documentId: string) {
   const parentId = process.env.GOOGLE_DRIVE_FOLDER_ID;
