@@ -48,31 +48,38 @@ app.get("/api/ping", (_req, res) => {
   res.json({ message: process.env.PING_MESSAGE || "pong" });
 });
 
-// ── Get or create a subfolder by document ID ─────────────────────────────────
-async function getOrCreateFolder(documentId) {
-  const parentId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-
-  // Check if folder already exists
+// ── Get or create a folder by name inside a given parent ─────────────────────
+async function getOrCreateFolderIn(name, parentId) {
   const search = await drive.files.list({
-    q: `name='${documentId}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`,
+    q: `name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`,
     fields: "files(id)",
   });
+  if (search.data.files.length > 0) return search.data.files[0].id;
 
-  if (search.data.files.length > 0) {
-    return search.data.files[0].id;
-  }
-
-  // Create the folder
   const folder = await drive.files.create({
-    requestBody: {
-      name: documentId,
-      mimeType: "application/vnd.google-apps.folder",
-      parents: [parentId],
-    },
+    requestBody: { name, mimeType: "application/vnd.google-apps.folder", parents: [parentId] },
     fields: "id",
   });
-
   return folder.data.id;
+}
+
+// ── Get current month folder name (e.g. "2026-04 - April 2026") ──────────────
+function getMonthFolderName(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const monthName = date.toLocaleString("en-US", { month: "long" });
+  return `${year}-${month} - ${monthName} ${year}`;
+}
+
+// ── Get or create: Root → Month → Document folder ────────────────────────────
+async function getOrCreateFolder(documentId, date = new Date()) {
+  const rootId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+  const monthName = getMonthFolderName(date);
+
+  const monthFolderId = await getOrCreateFolderIn(monthName, rootId);
+  const docFolderId = await getOrCreateFolderIn(documentId, monthFolderId);
+
+  return docFolderId;
 }
 
 // ── Helper: initiate resumable upload session ─────────────────────────────────
@@ -183,18 +190,18 @@ app.post("/api/upload-complete", async (req, res) => {
   }
 });
 
-// ── Delete Google Drive folder for a document ────────────────────────────────
+// ── Delete Google Drive folder for a document (searches across all month folders)
 app.delete("/api/delete-folder/:documentId", async (req, res) => {
   try {
     const { documentId } = req.params;
-    const parentId = process.env.GOOGLE_DRIVE_FOLDER_ID;
 
+    // Search for the document folder anywhere under the root (across all month folders)
     const search = await drive.files.list({
-      q: `name='${documentId}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`,
+      q: `name='${documentId}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
       fields: "files(id)",
     });
 
-    if (search.data.files.length === 0) {
+    if (!search.data.files || search.data.files.length === 0) {
       return res.json({ success: true, message: "No folder found" });
     }
 
