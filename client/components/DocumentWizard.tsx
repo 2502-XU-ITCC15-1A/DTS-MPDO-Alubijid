@@ -271,11 +271,11 @@ export default function DocumentWizard({
                       {type}
                     </option>
                   ))}
-                  {customDocumentTypes.map((type) => (
+                  {/* {customDocumentTypes.map((type) => (
                     <option key={type} value={type}>
                       {type}
                     </option>
-                  ))}
+                  ))} */}
                   <option value="Others">Others</option>
                 </select>
                 {formData.documentType === "Others" && (
@@ -329,12 +329,12 @@ export default function DocumentWizard({
                       {loc}
                     </option>
                   ))}
-                  {customSources.map((src) => (
+                  {/* {customSources.map((src) => (
                     <option key={src} value={src}>
                       {src}
                     </option>
-                  ))}
-                  <option value="Others">Others</option>
+                  ))} */}
+                  {/* <option value="Others">Others</option> */}
                 </select>
                 {formData.source === "Others" && (
                   <div className="mt-3 flex gap-2">

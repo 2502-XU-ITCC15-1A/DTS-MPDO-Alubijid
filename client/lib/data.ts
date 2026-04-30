@@ -30,12 +30,15 @@ export async function updateEmployeeRole(id: string, role: "admin" | "staff") {
 }
 
 export async function deleteEmployee(id: string) {
-  const response = await fetch(`/api/delete-employee/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `/api/delete-employee/${encodeURIComponent(id)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);
@@ -185,7 +188,10 @@ export async function deleteDocument(id: string) {
 }
 
 export async function deleteDocumentFile(fileId: string) {
-  const { error } = await supabase.from("document_files").delete().eq("id", fileId);
+  const { error } = await supabase
+    .from("document_files")
+    .delete()
+    .eq("id", fileId);
   if (error) throw error;
 }
 
@@ -260,10 +266,7 @@ export async function sendDocumentForApproval(
   );
 }
 
-export async function approveDocument(
-  documentId: string,
-  approver: string,
-) {
+export async function approveDocument(documentId: string, approver: string) {
   await updateDocument(documentId, { status: "Completed" });
   await addAuditLog(
     documentId,
@@ -342,13 +345,25 @@ export async function reviseDocument(
 // ── Static data ────────────────────────────────────────────────────────────────
 
 export const locations = [
+  "Human Resource Management Office",
+  "Local Civil Registrar",
   "Mayor's Office",
-  "National Agency",
-  "Public Applicant",
-  "LGU Office",
-  "Planning Department",
-  "Engineering Department",
-  "Finance Department",
+  "Municipal Accounting Office",
+  "Municipal Assessor's Office",
+  "Municipal Budget Office",
+  "Municipal Economic Enterprise & Development Office – Market, Slaughterhouse, Cemetery",
+  "Municipal Engineering Office",
+  "Municipal Environment and Natural Resources Office",
+  "Municipal Health Office",
+  "Municipal Planning and Development Office",
+  "Municipal Social Welfare and Development Office",
+  "Municipal Treasury Office",
+  "Office of the Agricultural Services",
+  "Sangguniang Bayan Office",
+  "DILG Office",
+  "Alubijid Municipal Police Station",
+  "Alubijid Fire Station",
+  "Others",
 ];
 
 export const routingActionOptions: RoutingAction[] = [
