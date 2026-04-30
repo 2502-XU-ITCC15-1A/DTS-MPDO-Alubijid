@@ -206,7 +206,7 @@ export default function Dashboard() {
     }
   }, [documents, searchParams]);
 
-  // Start camera scanner
+  // Startt camera scanner
   const startScanner = async () => {
     setScannerError(null);
     setScanResult(null);
