@@ -101,6 +101,18 @@ function initResumableUpload(token, fileName, mimeType, folderId) {
   });
 }
 
+// ── Test Google Drive connection ──────────────────────────────────────────────
+app.get("/api/test-drive", async (_req, res) => {
+  try {
+    const { token } = await oauth2Client.getAccessToken();
+    if (!token) return res.status(500).json({ ok: false, error: "Could not get access token — check GOOGLE_REFRESH_TOKEN" });
+    const list = await drive.files.list({ pageSize: 1, fields: "files(id,name)" });
+    res.json({ ok: true, tokenOk: true, sample: list.data.files });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ── Upload file to Google Drive (multipart form) ─────────────────────────────
 app.post("/api/upload", upload.single("file"), async (req, res) => {
   try {
@@ -108,13 +120,19 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
     const { documentId } = req.body;
     if (!documentId) return res.status(400).json({ error: "No documentId provided" });
 
-    const folderId = await getOrCreateFolder(documentId);
+    console.log(`Uploading "${req.file.originalname}" (${req.file.size} bytes) for document ${documentId}`);
 
+    const folderId = await getOrCreateFolder(documentId);
+    console.log(`Drive folder ID: ${folderId}`);
+
+    // Wrap buffer in array so Readable emits the whole chunk at once (not byte-by-byte)
     const driveRes = await drive.files.create({
       requestBody: { name: req.file.originalname, parents: [folderId] },
-      media: { mimeType: req.file.mimetype, body: Readable.from(req.file.buffer) },
+      media: { mimeType: req.file.mimetype, body: Readable.from([req.file.buffer]) },
       fields: "id, webViewLink",
     });
+
+    console.log(`Uploaded to Drive. File ID: ${driveRes.data.id}`);
 
     await drive.permissions.create({
       fileId: driveRes.data.id,
@@ -233,10 +251,164 @@ app.post("/api/create-account", async (req, res) => {
 
   if (error) return res.status(400).json({ error: error.message });
 
-  // Update name in employees table
-  if (name) {
-    await supabaseAdmin.from("employees").update({ name }).eq("email", email);
+  // Update name and personal email in employees table
+  const updates = {};
+  if (name) updates.name = name;
+  if (req.body.personalEmail) updates.personal_email = req.body.personalEmail;
+  if (Object.keys(updates).length > 0) {
+    await supabaseAdmin.from("employees").update(updates).eq("email", email);
   }
+
+  res.json({ success: true });
+});
+
+// ── Send OTP for password reset (email-based) ────────────────────────────────
+app.post("/api/send-otp", async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: "Email required" });
+
+  // Look up employee by personal_email
+  const { data: employee, error: empErr } = await supabaseAdmin
+    .from("employees")
+    .select("email, personal_email, name")
+    .eq("personal_email", email.toLowerCase().trim())
+    .single();
+
+  if (empErr || !employee || !employee.personal_email) {
+    return res.status(404).json({ error: "No account found with this personal email address." });
+  }
+
+  const sendTo = employee.personal_email;
+
+  // Generate 6-digit OTP
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
+
+  // Invalidate any existing OTPs for this personal email
+  await supabaseAdmin.from("otp_tokens").delete().eq("email", sendTo);
+
+  // Store OTP keyed by personal_email
+  const { error: insertErr } = await supabaseAdmin.from("otp_tokens").insert({
+    phone: "",
+    email: sendTo,
+    otp,
+    expires_at: expiresAt,
+  });
+
+  if (insertErr) return res.status(500).json({ error: "Failed to generate OTP." });
+
+  const emailUser = process.env.EMAIL_USER;
+  const emailPass = process.env.EMAIL_PASS;
+
+  if (emailUser && emailPass) {
+    try {
+      const nodemailer = require("nodemailer");
+      const transporter = nodemailer.createTransport({
+        host: process.env.EMAIL_HOST || "smtp.gmail.com",
+        port: parseInt(process.env.EMAIL_PORT || "587"),
+        secure: false,
+        auth: { user: emailUser, pass: emailPass },
+      });
+
+      await transporter.sendMail({
+        from: `"MPDO Document Tracking" <${emailUser}>`,
+        to: sendTo,
+        subject: "Your Password Reset OTP — MPDO DTS",
+        html: `
+          <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;">
+            <h2 style="color:#0069c0;margin-bottom:4px;">Password Reset</h2>
+            <p style="color:#374151;">Hi ${employee.name || "there"},</p>
+            <p style="color:#374151;">Use the OTP below to reset your MPDO DTS password. It expires in <strong>10 minutes</strong>.</p>
+            <div style="background:#f0f9ff;border:2px dashed #0069c0;border-radius:8px;padding:20px;text-align:center;margin:24px 0;">
+              <span style="font-size:36px;font-weight:bold;letter-spacing:10px;color:#0069c0;">${otp}</span>
+            </div>
+            <p style="color:#6b7280;font-size:13px;">If you did not request this, ignore this email. Do not share this code with anyone.</p>
+          </div>
+        `,
+      });
+
+      console.log(`[OTP] Sent via email to ${sendTo}`);
+      res.json({ success: true });
+    } catch (mailErr) {
+      console.error("[OTP] Email send failed:", mailErr.message);
+      res.status(500).json({ error: `Email failed: ${mailErr.message}` });
+    }
+  } else {
+    // Development mode — return OTP so UI can display it
+    console.log(`[OTP DEV] Personal email: ${sendTo} | Code: ${otp}`);
+    res.json({ success: true, devOtp: otp });
+  }
+});
+
+// ── Verify OTP ────────────────────────────────────────────────────────────────
+app.post("/api/verify-otp", async (req, res) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) return res.status(400).json({ error: "Email and OTP required" });
+
+  const { data: token, error } = await supabaseAdmin
+    .from("otp_tokens")
+    .select("*")
+    .eq("email", email.toLowerCase().trim())
+    .eq("otp", otp)
+    .eq("used", false)
+    .single();
+
+  if (error || !token) return res.status(400).json({ error: "Invalid OTP." });
+
+  if (new Date(token.expires_at) < new Date()) {
+    return res.status(400).json({ error: "OTP has expired. Please request a new one." });
+  }
+
+  // Mark OTP as used
+  await supabaseAdmin.from("otp_tokens").update({ used: true }).eq("id", token.id);
+
+  // Generate a short-lived reset token
+  const resetToken = require("crypto").randomBytes(32).toString("hex");
+  const resetExpiry = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 min
+
+  await supabaseAdmin.from("otp_tokens").insert({
+    phone: "",
+    email: token.email,
+    otp: resetToken,
+    expires_at: resetExpiry,
+    used: false,
+  });
+
+  res.json({ success: true, resetToken, email: token.email });
+});
+
+// ── Reset password using verified reset token ─────────────────────────────────
+app.post("/api/reset-password", async (req, res) => {
+  const { resetToken, password } = req.body;
+  if (!resetToken || !password) return res.status(400).json({ error: "Token and password required" });
+  if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
+
+  const { data: token, error } = await supabaseAdmin
+    .from("otp_tokens")
+    .select("*")
+    .eq("otp", resetToken)
+    .eq("used", false)
+    .single();
+
+  if (error || !token) return res.status(400).json({ error: "Invalid or expired reset token." });
+
+  if (new Date(token.expires_at) < new Date()) {
+    return res.status(400).json({ error: "Reset token has expired. Please start over." });
+  }
+
+  // Get the Supabase auth user by email
+  const { data: { users }, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
+  if (listErr) return res.status(500).json({ error: "Failed to look up user." });
+
+  const authUser = users.find((u) => u.email === token.email);
+  if (!authUser) return res.status(404).json({ error: "Auth account not found." });
+
+  // Update password
+  const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(authUser.id, { password });
+  if (updateErr) return res.status(500).json({ error: updateErr.message });
+
+  // Invalidate the reset token
+  await supabaseAdmin.from("otp_tokens").update({ used: true }).eq("id", token.id);
 
   res.json({ success: true });
 });

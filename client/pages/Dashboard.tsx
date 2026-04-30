@@ -1,11 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 import { Html5Qrcode } from "html5-qrcode";
 import { useAuth } from "@/context/AuthContext";
 import DocumentWizard from "@/components/DocumentWizard";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   getDocuments,
   getEmployees,
@@ -42,41 +49,99 @@ import {
 } from "lucide-react";
 
 const statusColors = {
-  Pending: { bg: "bg-yellow-50", border: "border-yellow-200", text: "text-yellow-700", icon: AlertCircle },
-  Processing: { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700", icon: HourglassIcon },
-  Approved: { bg: "bg-green-50", border: "border-green-200", text: "text-green-700", icon: CheckCircle },
-  Released: { bg: "bg-green-50", border: "border-green-200", text: "text-green-700", icon: CheckCircle },
-  Overdue: { bg: "bg-red-50", border: "border-red-200", text: "text-red-700", icon: AlertCircle },
+  Pending: {
+    bg: "bg-yellow-50",
+    border: "border-yellow-200",
+    text: "text-yellow-700",
+    icon: AlertCircle,
+  },
+  Processing: {
+    bg: "bg-blue-50",
+    border: "border-blue-200",
+    text: "text-blue-700",
+    icon: HourglassIcon,
+  },
+  Approved: {
+    bg: "bg-green-50",
+    border: "border-green-200",
+    text: "text-green-700",
+    icon: CheckCircle,
+  },
+  Released: {
+    bg: "bg-green-50",
+    border: "border-green-200",
+    text: "text-green-700",
+    icon: CheckCircle,
+  },
+  Overdue: {
+    bg: "bg-red-50",
+    border: "border-red-200",
+    text: "text-red-700",
+    icon: AlertCircle,
+  },
 };
 
 const statusOptions = [
-  { value: "Pending", label: "Pending", icon: AlertCircle, text: "text-yellow-700" },
-  { value: "Processing", label: "Processing", icon: HourglassIcon, text: "text-blue-700" },
-  { value: "Approved", label: "Completed", icon: CheckCircle, text: "text-green-700" },
-  { value: "Overdue", label: "Overdue", icon: AlertCircle, text: "text-red-700" },
+  {
+    value: "Pending",
+    label: "Pending",
+    icon: AlertCircle,
+    text: "text-yellow-700",
+  },
+  {
+    value: "Processing",
+    label: "Processing",
+    icon: HourglassIcon,
+    text: "text-blue-700",
+  },
+  {
+    value: "Approved",
+    label: "Completed",
+    icon: CheckCircle,
+    text: "text-green-700",
+  },
+  {
+    value: "Overdue",
+    label: "Overdue",
+    icon: AlertCircle,
+    text: "text-red-700",
+  },
 ] as const;
 
 const getStatusDetails = (status: string) => {
   if (status === "Approved" || status === "Released") {
     return statusOptions[2];
   }
-  return statusOptions.find((option) => option.value === status) ?? statusOptions[0];
+  return (
+    statusOptions.find((option) => option.value === status) ?? statusOptions[0]
+  );
 };
 
 const getStatusValue = (status: Document["status"]) =>
   status === "Released" ? "Approved" : status;
 
-const documentTypeFilters: DocumentType[] = ["Received", "Assigned", "Opened", "Processed", "Approved", "Released"];
+const documentTypeFilters: DocumentType[] = [
+  "Received",
+  "Assigned",
+  "Opened",
+  "Processed",
+  "Approved",
+  "Released",
+];
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeTab, setActiveTab] = useState<"all" | "incoming" | "outgoing">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "incoming" | "outgoing">(
+    "all",
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState<DocumentType | "all">("all");
+  const [selectedFilter, setSelectedFilter] = useState<DocumentType | "all">(
+    "all",
+  );
   const [showEmployeeMenu, setShowEmployeeMenu] = useState(false);
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
@@ -88,7 +153,9 @@ export default function Dashboard() {
     assignedTo: "",
     deadline: "",
   });
-  const [selectedRoutingActions, setSelectedRoutingActions] = useState<RoutingAction[]>([]);
+  const [selectedRoutingActions, setSelectedRoutingActions] = useState<
+    RoutingAction[]
+  >([]);
   const [routingRemarks, setRoutingRemarks] = useState("");
   const [docViewMode, setDocViewMode] = useState<"view" | "edit">("view");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -104,6 +171,11 @@ export default function Dashboard() {
   const [uploadModalFile, setUploadModalFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [isMarkingDone, setIsMarkingDone] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
 
   const exportQrCode = () => {
@@ -154,8 +226,12 @@ export default function Dashboard() {
     name: "",
     unit: "MPDC",
   });
-  const [customDocumentTypes, setCustomDocumentTypes] = useState<string[]>([]);
-  const [customSources, setCustomSources] = useState<string[]>([]);
+  const [customDocumentTypes, setCustomDocumentTypes] = useState<string[]>(() =>
+    JSON.parse(localStorage.getItem("customDocumentTypes") || "[]")
+  );
+  const [customSources, setCustomSources] = useState<string[]>(() =>
+    JSON.parse(localStorage.getItem("customSources") || "[]")
+  );
   const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
   const [newSourceName, setNewSourceName] = useState("");
 
@@ -194,6 +270,20 @@ export default function Dashboard() {
     }
   }, []);
 
+  // Sync editForm whenever a different document is selected
+  useEffect(() => {
+    if (selectedDoc) {
+      setEditForm({
+        source: selectedDoc.source || "",
+        assignedTo: selectedDoc.assignedTo || "",
+        status: selectedDoc.status || "",
+        deadline: selectedDoc.deadline || "",
+        destination: selectedDoc.destination || "",
+        documentType: selectedDoc.type || "",
+      });
+    }
+  }, [selectedDoc?.id]);
+
   // Auto-open document from ?doc= URL param (set when QR code is scanned)
   useEffect(() => {
     const docId = searchParams.get("doc");
@@ -223,10 +313,12 @@ export default function Dashboard() {
         (decodedText) => {
           handleQrResult(decodedText);
         },
-        () => {}
+        () => {},
       );
     } catch (err: any) {
-      setScannerError(err?.message || "Cannot access camera. Please allow camera permission.");
+      setScannerError(
+        err?.message || "Cannot access camera. Please allow camera permission.",
+      );
     }
   };
 
@@ -307,7 +399,11 @@ export default function Dashboard() {
   };
 
   const handleSaveEdits = async () => {
-    if (!selectedDoc) return;
+    if (!selectedDoc || isSaving) return;
+    setIsSaving(true);
+
+    const newStatus = (editForm.status as Document["status"]) || selectedDoc.status;
+    const actor = user?.name || "Admin";
 
     const resolvedDeadline = editForm.deadline || selectedDoc.deadline;
     const resolvedStatus = (editForm.status as Document["status"]) || selectedDoc.status;
@@ -329,34 +425,55 @@ export default function Dashboard() {
         deadline: resolvedDeadline,
       });
 
-      const updatedDoc: Document = {
-        ...selectedDoc,
-        type: (editForm.documentType || selectedDoc.type) as Document["type"],
-        source: editForm.source || selectedDoc.source,
-        assignedTo: editForm.assignedTo || selectedDoc.assignedTo,
-        destination: editForm.destination || selectedDoc.destination,
-        status: effectiveStatus,
-        deadline: resolvedDeadline,
-        updatedAt: new Date().toISOString(),
-      };
+      // Log every field that actually changed
+      if (effectiveStatus !== selectedDoc.status) {
+        await addAuditLog(selectedDoc.id, "Status Updated", actor, `"${selectedDoc.status}" → "${effectiveStatus}"`);
+      }
+      if (editForm.assignedTo !== selectedDoc.assignedTo) {
+        const oldName = employees.find((e) => e.email === selectedDoc.assignedTo)?.name || selectedDoc.assignedTo;
+        const newName = employees.find((e) => e.email === editForm.assignedTo)?.name || editForm.assignedTo;
+        await addAuditLog(selectedDoc.id, "Reassigned", actor, `"${oldName}" → "${newName}"`);
+      }
+      if (editForm.source !== selectedDoc.source) {
+        await addAuditLog(selectedDoc.id, "Source Updated", actor, `"${selectedDoc.source}" → "${editForm.source}"`);
+      }
+      if (editForm.deadline !== selectedDoc.deadline) {
+        await addAuditLog(selectedDoc.id, "Deadline Updated", actor, `"${selectedDoc.deadline}" → "${editForm.deadline}"`);
+      }
+      if ((editForm.destination || "") !== (selectedDoc.destination || "")) {
+        await addAuditLog(selectedDoc.id, "Destination Updated", actor, `"${selectedDoc.destination || "None"}" → "${editForm.destination || "None"}"`);
+      }
 
-      setDocuments((prev) =>
-        prev.map((doc) => (doc.id === selectedDoc.id ? updatedDoc : doc))
-      );
-      setSelectedDoc(updatedDoc);
+      // Refresh from DB so the audit log section shows the new entries immediately
+      const updated = await getDocuments();
+      setDocuments(updated);
+      const refreshed = updated.find((d) => d.id === selectedDoc.id);
+      if (refreshed) setSelectedDoc(refreshed);
       setDocViewMode("view");
-    } catch (err) {
+      toast.success("Document updated successfully.");
+    } catch (err: any) {
       console.error("Failed to save edits:", err);
+      toast.error(err.message || "Failed to save changes.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleDocStatusChange = async (docId: string, value: Document["status"]) => {
+  const handleDocStatusChange = async (
+    docId: string,
+    value: Document["status"],
+  ) => {
     try {
+      const doc = documents.find((d) => d.id === docId);
+      const oldStatus = doc?.status || "";
       await updateDocument(docId, { status: value });
+      await addAuditLog(docId, "Status Updated", user?.name || "Admin", `"${oldStatus}" → "${value}"`);
       setDocuments((prev) =>
         prev.map((doc) =>
-          doc.id === docId ? { ...doc, status: value, updatedAt: new Date().toISOString() } : doc
-        )
+          doc.id === docId
+            ? { ...doc, status: value, updatedAt: new Date().toISOString() }
+            : doc,
+        ),
       );
       if (selectedDoc?.id === docId) {
         setSelectedDoc({ ...selectedDoc, status: value });
@@ -367,7 +484,10 @@ export default function Dashboard() {
   };
 
   const handleAddCustomDocumentType = () => {
-    if (newDocumentTypeName.trim() && !customDocumentTypes.includes(newDocumentTypeName.trim())) {
+    if (
+      newDocumentTypeName.trim() &&
+      !customDocumentTypes.includes(newDocumentTypeName.trim())
+    ) {
       const updated = [...customDocumentTypes, newDocumentTypeName.trim()];
       setCustomDocumentTypes(updated);
       localStorage.setItem("customDocumentTypes", JSON.stringify(updated));
@@ -410,16 +530,19 @@ export default function Dashboard() {
   // Calculate statistics from visible documents
   const stats = {
     pending: visibleDocuments.filter((d) => d.status === "Pending").length,
-    processing: visibleDocuments.filter((d) => d.status === "Processing").length,
-    completed: visibleDocuments.filter((d) => d.status === "Approved" || d.status === "Released").length,
+    processing: visibleDocuments.filter((d) => d.status === "Processing")
+      .length,
+    completed: visibleDocuments.filter(
+      (d) => d.status === "Approved" || d.status === "Released",
+    ).length,
     overdue: visibleDocuments.filter((d) => d.status === "Overdue").length,
   };
 
   const avgResponseTime = "3.2 days";
 
-  // Filter by search (DTN), document type, assignment, and deadline
+  // Filter by search (DTN or document name), document type, assignment, and deadline
   const filteredDocuments = visibleDocuments.filter((doc) => {
-    const matchesSearch = doc.id.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = doc.id.toLowerCase().includes(searchQuery.toLowerCase()) || doc.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesDocType = selectedFilter === "all" || doc.documentType === selectedFilter;
     const matchesAssignment = filterAssignedTo === "all" || doc.assignedTo === filterAssignedTo;
 
@@ -429,19 +552,34 @@ export default function Dashboard() {
       today.setHours(0, 0, 0, 0);
       const docDeadline = new Date(doc.deadline);
       docDeadline.setHours(0, 0, 0, 0);
-      const daysUntilDeadline = Math.ceil((docDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      const daysUntilDeadline = Math.ceil(
+        (docDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+      );
 
       if (filterDeadline === "overdue") matchesDeadline = daysUntilDeadline < 0;
-      else if (filterDeadline === "today") matchesDeadline = daysUntilDeadline === 0;
-      else if (filterDeadline === "this-week") matchesDeadline = daysUntilDeadline >= 0 && daysUntilDeadline <= 7;
-      else if (filterDeadline === "upcoming") matchesDeadline = daysUntilDeadline > 7;
+      else if (filterDeadline === "today")
+        matchesDeadline = daysUntilDeadline === 0;
+      else if (filterDeadline === "this-week")
+        matchesDeadline = daysUntilDeadline >= 0 && daysUntilDeadline <= 7;
+      else if (filterDeadline === "upcoming")
+        matchesDeadline = daysUntilDeadline > 7;
     }
 
-    return matchesSearch && matchesDocType && matchesAssignment && matchesDeadline;
+    return (
+      matchesSearch && matchesDocType && matchesAssignment && matchesDeadline
+    );
   });
+
+  const isProcessing = isSaving || isSubmitting || isApproving || isMarkingDone || isDeleting || isUploading;
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Global loading bar */}
+      {isProcessing && (
+        <div className="fixed top-0 left-0 right-0 z-[100] h-1 bg-primary/20">
+          <div className="h-full bg-primary animate-[loading-bar_1.2s_ease-in-out_infinite]" />
+        </div>
+      )}
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -455,7 +593,9 @@ export default function Dashboard() {
             <div className="flex items-center gap-6">
               {/* Account Name - showing email prefix and role */}
               <div className="text-right">
-                <p className="font-semibold text-gray-900">{user?.email?.split("@")[0]}</p>
+                <p className="font-semibold text-gray-900">
+                  {user?.email?.split("@")[0]}
+                </p>
                 <p className="text-sm text-gray-500 capitalize">{user?.role}</p>
               </div>
 
@@ -474,7 +614,9 @@ export default function Dashboard() {
                     <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                       <div className="p-4">
                         <div className="flex justify-between items-center mb-3">
-                          <h3 className="font-semibold text-gray-900 text-sm">Employees</h3>
+                          <h3 className="font-semibold text-gray-900 text-sm">
+                            Employees
+                          </h3>
                           <button
                             onClick={() => {
                               setShowAddEmployeeModal(true);
@@ -510,14 +652,23 @@ export default function Dashboard() {
                               <select
                                 value={employee.role}
                                 onChange={async (e) => {
-                                  const role = e.target.value as "admin" | "staff";
+                                  const role = e.target.value as
+                                    | "admin"
+                                    | "staff";
                                   try {
                                     await updateEmployeeRole(employee.id, role);
                                     setEmployees((prev) =>
-                                      prev.map((emp) => emp.id === employee.id ? { ...emp, role } : emp)
+                                      prev.map((emp) =>
+                                        emp.id === employee.id
+                                          ? { ...emp, role }
+                                          : emp,
+                                      ),
                                     );
                                   } catch (err) {
-                                    console.error("Failed to update role:", err);
+                                    console.error(
+                                      "Failed to update role:",
+                                      err,
+                                    );
                                   }
                                 }}
                                 className="text-xs px-2 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 flex-shrink-0"
@@ -563,7 +714,9 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm font-medium">Pending</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{stats.pending}</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {stats.pending}
+                </p>
               </div>
               <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
                 <AlertCircle className="w-6 h-6 text-yellow-600" />
@@ -575,7 +728,9 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm font-medium">Processing</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{stats.processing}</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {stats.processing}
+                </p>
               </div>
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                 <HourglassIcon className="w-6 h-6 text-blue-600" />
@@ -587,7 +742,9 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm font-medium">Completed</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{stats.completed}</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {stats.completed}
+                </p>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                 <CheckCircle className="w-6 h-6 text-green-600" />
@@ -599,7 +756,9 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm font-medium">Overdue</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{stats.overdue}</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {stats.overdue}
+                </p>
               </div>
               <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
                 <AlertCircle className="w-6 h-6 text-red-600" />
@@ -683,7 +842,7 @@ export default function Dashboard() {
                 <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search by DTN..."
+                  placeholder="Search by DTN or document name..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
@@ -691,19 +850,6 @@ export default function Dashboard() {
               </div>
 
               {/* Document Type Filter */}
-              <select
-                value={selectedFilter}
-                onChange={(e) => setSelectedFilter(e.target.value as DocumentType | "all")}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
-              >
-                <option value="all">All Types</option>
-                {documentTypeFilters.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-
               {/* Assignment Filter - admin only */}
               {user?.role === "admin" && (
                 <select
@@ -753,9 +899,12 @@ export default function Dashboard() {
               </div>
             ) : (
               filteredDocuments.map((doc) => {
-                const statusColor = statusColors[doc.status as keyof typeof statusColors];
+                const statusColor =
+                  statusColors[doc.status as keyof typeof statusColors];
                 const StatusIcon = statusColor.icon;
-                const assignedEmployee = employees.find((e) => e.email === doc.assignedTo);
+                const assignedEmployee = employees.find(
+                  (e) => e.email === doc.assignedTo,
+                );
                 return (
                   <div
                     key={doc.id}
@@ -764,7 +913,8 @@ export default function Dashboard() {
                       borderLeftColor:
                         doc.status === "Overdue"
                           ? "#ef4444"
-                          : doc.status === "Approved" || doc.status === "Released"
+                          : doc.status === "Approved" ||
+                              doc.status === "Released"
                             ? "#10b981"
                             : "#3b82f6",
                     }}
@@ -783,7 +933,9 @@ export default function Dashboard() {
                     <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
-                          <h4 className="text-lg font-semibold text-gray-900 truncate">{doc.title}</h4>
+                          <h4 className="text-lg font-semibold text-gray-900 truncate">
+                            {doc.title}
+                          </h4>
                           <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded text-gray-700 whitespace-nowrap">
                             {doc.id}
                           </span>
@@ -791,56 +943,82 @@ export default function Dashboard() {
                         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-sm text-gray-600">
                           <div>
                             <p className="text-xs text-gray-500">Type</p>
-                            <p className="font-medium text-gray-900">{doc.type}</p>
+                            <p className="font-medium text-gray-900">
+                              {doc.type}
+                            </p>
                           </div>
                           <div>
                             <p className="text-xs text-gray-500">Received</p>
-                            <p className="font-medium text-gray-900">{doc.timestamp}</p>
+                            <p className="font-medium text-gray-900">
+                              {doc.timestamp}
+                            </p>
                           </div>
                           <div>
                             <p className="text-xs text-gray-500">Assigned To</p>
-                            <p className="font-medium text-gray-900">{assignedEmployee?.name || doc.assignedTo}</p>
+                            <p className="font-medium text-gray-900">
+                              {assignedEmployee?.name || doc.assignedTo}
+                            </p>
                           </div>
                           <div>
                             <p className="text-xs text-gray-500">Deadline</p>
-                            <p className="font-medium text-gray-900">{doc.deadline}</p>
+                            <p className="font-medium text-gray-900">
+                              {doc.deadline}
+                            </p>
                           </div>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <Select
-                        value={getStatusValue(doc.status)}
-                        onValueChange={(value) => handleDocStatusChange(doc.id, value as Document["status"])}
-                      >
-                        <SelectTrigger
-                          onClick={(e) => e.stopPropagation()}
-                          className={`rounded-full border ${statusColor.border} bg-white text-left px-3 py-1.5 h-9 inline-flex items-center gap-2 w-fit min-w-[10rem]`}
+                          value={getStatusValue(doc.status)}
+                          onValueChange={(value) =>
+                            handleDocStatusChange(
+                              doc.id,
+                              value as Document["status"],
+                            )
+                          }
                         >
-                          <StatusIcon className={`w-4 h-4 ${statusColor.text}`} />
-                          <span className={`text-sm font-medium ${statusColor.text}`}>{getStatusDetails(doc.status).label}</span>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {statusOptions.map((option) => {
-                            const OptionIcon = option.icon;
-                            return (
-                              <SelectItem key={option.value} value={option.value}>
-                                <div className="flex items-center gap-2">
-                                  <OptionIcon className={`w-4 h-4 ${option.text}`} />
-                                  <span>{option.label}</span>
-                                </div>
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
+                          <SelectTrigger
+                            onClick={(e) => e.stopPropagation()}
+                            className={`rounded-full border ${statusColor.border} bg-white text-left px-3 py-1.5 h-9 inline-flex items-center gap-2 w-fit min-w-[10rem]`}
+                          >
+                            <StatusIcon
+                              className={`w-4 h-4 ${statusColor.text}`}
+                            />
+                            <span
+                              className={`text-sm font-medium ${statusColor.text}`}
+                            >
+                              {getStatusDetails(doc.status).label}
+                            </span>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {statusOptions.map((option) => {
+                              const OptionIcon = option.icon;
+                              return (
+                                <SelectItem
+                                  key={option.value}
+                                  value={option.value}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <OptionIcon
+                                      className={`w-4 h-4 ${option.text}`}
+                                    />
+                                    <span>{option.label}</span>
+                                  </div>
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
                         {/* Document Actions Menu - admin only */}
                         {user?.role === "admin" && (
                           <div className="relative">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setOpenMenuDocId(openMenuDocId === doc.id ? null : doc.id);
+                                setOpenMenuDocId(
+                                  openMenuDocId === doc.id ? null : doc.id,
+                                );
                               }}
                               className="p-2 hover:bg-gray-200 rounded-lg transition"
                               title="More options"
@@ -924,7 +1102,10 @@ export default function Dashboard() {
                   <p className="text-white/80 text-sm mt-1">{selectedDoc.id}</p>
                   {user?.role === "admin" && (
                     <p className="text-white/70 text-xs mt-2">
-                      Mode: <span className="font-semibold capitalize">{docViewMode}</span>
+                      Mode:{" "}
+                      <span className="font-semibold capitalize">
+                        {docViewMode}
+                      </span>
                     </p>
                   )}
                 </div>
@@ -935,7 +1116,9 @@ export default function Dashboard() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setDocViewMode(docViewMode === "view" ? "edit" : "view");
+                          setDocViewMode(
+                            docViewMode === "view" ? "edit" : "view",
+                          );
                         }}
                         className="p-2 bg-white/20 hover:bg-white/30 text-white rounded transition"
                         title={docViewMode === "view" ? "Edit" : "View"}
@@ -950,10 +1133,18 @@ export default function Dashboard() {
                             e.stopPropagation();
                             handleSaveEdits();
                           }}
-                          className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-100 rounded transition"
-                          title="Save"
+                          disabled={isSaving}
+                          className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-100 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={isSaving ? "Saving..." : "Save"}
                         >
-                          <CheckCircle className="w-5 h-5" />
+                          {isSaving ? (
+                            <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                            </svg>
+                          ) : (
+                            <CheckCircle className="w-5 h-5" />
+                          )}
                         </button>
                       )}
 
@@ -1004,9 +1195,7 @@ export default function Dashboard() {
                         <option value="Development">Development</option>
                         <option value="Environmental">Environmental</option>
                         {customDocumentTypes.map((type) => (
-                          <option key={type} value={type}>
-                            {type}
-                          </option>
+                          <option key={type} value={type}>{type}</option>
                         ))}
                         <option value="Others">Others</option>
                       </select>
@@ -1039,7 +1228,9 @@ export default function Dashboard() {
                   )}
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 uppercase font-semibold">Source</p>
+                  <p className="text-xs text-gray-500 uppercase font-semibold">
+                    Source
+                  </p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <div className="mt-1">
                       <select
@@ -1048,14 +1239,10 @@ export default function Dashboard() {
                         onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
                       >
                         {locations.map((loc) => (
-                          <option key={loc} value={loc}>
-                            {loc}
-                          </option>
+                          <option key={loc} value={loc}>{loc}</option>
                         ))}
                         {customSources.map((src) => (
-                          <option key={src} value={src}>
-                            {src}
-                          </option>
+                          <option key={src} value={src}>{src}</option>
                         ))}
                         <option value="Others">Others</option>
                       </select>
@@ -1084,13 +1271,18 @@ export default function Dashboard() {
                       )}
                     </div>
                   ) : (
-                    <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.source}</p>
+                    <p className="text-lg font-medium text-gray-900 mt-1">
+                      {selectedDoc.source}
+                    </p>
                   )}
                 </div>
                 {/* QR Code — spans 2 rows */}
                 <div className="row-span-2 flex flex-col items-center justify-center">
                   <button
-                    onClick={(e) => { e.stopPropagation(); setShowQrModal(true); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowQrModal(true);
+                    }}
                     className="group p-2 rounded-xl border-2 border-dashed border-gray-300 hover:border-primary hover:bg-primary/5 transition-all"
                     title="View QR Code"
                   >
@@ -1101,15 +1293,21 @@ export default function Dashboard() {
                       className="rounded"
                     />
                   </button>
-                  <p className="text-xs text-gray-400 mt-1 font-medium">Tap to expand</p>
+                  <p className="text-xs text-gray-400 mt-1 font-medium">
+                    Tap to expand
+                  </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 uppercase font-semibold">Assigned To</p>
+                  <p className="text-xs text-gray-500 uppercase font-semibold">
+                    Assigned To
+                  </p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <select
                       className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
                       value={editForm.assignedTo || ""}
-                      onChange={(e) => setEditForm({ ...editForm, assignedTo: e.target.value })}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, assignedTo: e.target.value })
+                      }
                     >
                       {employees
                         .filter((e) => e.role === "staff")
@@ -1121,34 +1319,52 @@ export default function Dashboard() {
                     </select>
                   ) : (
                     <p className="text-lg font-medium text-gray-900 mt-1">
-                      {employees.find((e) => e.email === selectedDoc.assignedTo)?.name}
+                      {
+                        employees.find(
+                          (e) => e.email === selectedDoc.assignedTo,
+                        )?.name
+                      }
                     </p>
                   )}
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 uppercase font-semibold">Deadline</p>
+                  <p className="text-xs text-gray-500 uppercase font-semibold">
+                    Deadline
+                  </p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <input
                       type="date"
                       className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
                       value={editForm.deadline || ""}
-                      onChange={(e) => setEditForm({ ...editForm, deadline: e.target.value })}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, deadline: e.target.value })
+                      }
                     />
                   ) : (
-                    <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.deadline}</p>
+                    <p className="text-lg font-medium text-gray-900 mt-1">
+                      {selectedDoc.deadline}
+                    </p>
                   )}
                 </div>
               </div>
 
               {/* Destination field - only for outgoing documents (LGU Office source) */}
-              {(editForm.source === "LGU Office" || selectedDoc.destination) && (
+              {(editForm.source === "LGU Office" ||
+                selectedDoc.destination) && (
                 <div>
-                  <p className="text-xs text-gray-500 uppercase font-semibold">Destination</p>
+                  <p className="text-xs text-gray-500 uppercase font-semibold">
+                    Destination
+                  </p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <select
                       className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
                       value={editForm.destination || ""}
-                      onChange={(e) => setEditForm({ ...editForm, destination: e.target.value })}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          destination: e.target.value,
+                        })
+                      }
                     >
                       {locations.map((loc) => (
                         <option key={loc} value={loc}>
@@ -1157,19 +1373,26 @@ export default function Dashboard() {
                       ))}
                     </select>
                   ) : (
-                    <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.destination || "N/A"}</p>
+                    <p className="text-lg font-medium text-gray-900 mt-1">
+                      {selectedDoc.destination || "N/A"}
+                    </p>
                   )}
                 </div>
               )}
 
               {/* Status Field */}
               <div>
-                <p className="text-xs text-gray-500 uppercase font-semibold mb-2">Status</p>
+                <p className="text-xs text-gray-500 uppercase font-semibold mb-2">
+                  Status
+                </p>
                 {docViewMode === "edit" ? (
                   <Select
                     value={editForm.status || ""}
                     onValueChange={(value) => {
-                      setEditForm({ ...editForm, status: value as Document["status"] });
+                      setEditForm({
+                        ...editForm,
+                        status: value as Document["status"],
+                      });
                       if (value === "Approved") {
                         setShowApprovalWorkflow(true);
                       }
@@ -1179,18 +1402,28 @@ export default function Dashboard() {
                       {editForm.status ? (
                         <div className="flex items-center gap-2">
                           {(() => {
-                            const selectedStatus = getStatusDetails(editForm.status);
+                            const selectedStatus = getStatusDetails(
+                              editForm.status,
+                            );
                             const SelectedIcon = selectedStatus.icon;
                             return (
                               <>
-                                <SelectedIcon className={`w-4 h-4 ${selectedStatus.text}`} />
-                                <span className={`text-sm font-medium ${selectedStatus.text}`}>{selectedStatus.label}</span>
+                                <SelectedIcon
+                                  className={`w-4 h-4 ${selectedStatus.text}`}
+                                />
+                                <span
+                                  className={`text-sm font-medium ${selectedStatus.text}`}
+                                >
+                                  {selectedStatus.label}
+                                </span>
                               </>
                             );
                           })()}
                         </div>
                       ) : (
-                        <span className="text-sm text-gray-500">Select status</span>
+                        <span className="text-sm text-gray-500">
+                          Select status
+                        </span>
                       )}
                     </SelectTrigger>
                     <SelectContent>
@@ -1199,7 +1432,9 @@ export default function Dashboard() {
                         return (
                           <SelectItem key={option.value} value={option.value}>
                             <div className="flex items-center gap-2">
-                              <OptionIcon className={`w-4 h-4 ${option.text}`} />
+                              <OptionIcon
+                                className={`w-4 h-4 ${option.text}`}
+                              />
                               <span>{option.label}</span>
                             </div>
                           </SelectItem>
@@ -1215,7 +1450,11 @@ export default function Dashboard() {
                       return (
                         <>
                           <StatusIcon className={`w-4 h-4 ${details.text}`} />
-                          <span className={`text-lg font-medium ${details.text}`}>{details.label}</span>
+                          <span
+                            className={`text-lg font-medium ${details.text}`}
+                          >
+                            {details.label}
+                          </span>
                         </>
                       );
                     })()}
@@ -1231,13 +1470,28 @@ export default function Dashboard() {
                     <p className="text-sm text-gray-500">No files attached</p>
                   ) : (
                     selectedDoc.files.map((file) => (
-                      <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div
+                        key={file.id}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                      >
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{file.name}</p>
-                          <p className="text-xs text-gray-500">Uploaded by {file.uploadedBy} on {file.uploadedAt}</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {file.name}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Uploaded by {file.uploadedBy} on {file.uploadedAt}
+                          </p>
                         </div>
-                        <a href={file.url} target="_blank" rel="noopener noreferrer">
-                          <Button variant="outline" size="sm" className="flex gap-2">
+                        <a
+                          href={file.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex gap-2"
+                          >
                             <Download className="w-4 h-4" />
                           </Button>
                         </a>
@@ -1262,10 +1516,15 @@ export default function Dashboard() {
                 >
                   <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                   {selectedFile ? (
-                    <p className="text-sm text-primary font-medium">{selectedFile.name}</p>
+                    <p className="text-sm text-primary font-medium">
+                      {selectedFile.name}
+                    </p>
                   ) : (
                     <p className="text-sm text-gray-600">
-                      Drag and drop or <span className="text-primary font-medium">click to upload</span>
+                      Drag and drop or{" "}
+                      <span className="text-primary font-medium">
+                        click to upload
+                      </span>
                     </p>
                   )}
                 </div>
@@ -1277,15 +1536,24 @@ export default function Dashboard() {
                     setIsUploading(true);
                     setUploadError(null);
                     try {
-                      await uploadFile(selectedDoc.id, selectedFile, user?.name || "User");
+                      await uploadFile(
+                        selectedDoc.id,
+                        selectedFile,
+                        user?.name || "User",
+                      );
                       const updated = await getDocuments();
                       setDocuments(updated);
-                      const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                      const refreshed = updated.find(
+                        (d) => d.id === selectedDoc.id,
+                      );
                       if (refreshed) setSelectedDoc(refreshed);
                       setSelectedFile(null);
                       if (fileInputRef.current) fileInputRef.current.value = "";
                     } catch (err: any) {
-                      setUploadError(err.message || "Upload failed. Make sure the backend server is running.");
+                      setUploadError(
+                        err.message ||
+                          "Upload failed. Make sure the backend server is running.",
+                      );
                     } finally {
                       setIsUploading(false);
                     }
@@ -1302,14 +1570,21 @@ export default function Dashboard() {
               {/* Routing Slip Section */}
               {selectedDoc.routingSlip && (
                 <div className="border-t pt-6">
-                  <h4 className="font-semibold text-gray-900 mb-4">Routing Slip</h4>
+                  <h4 className="font-semibold text-gray-900 mb-4">
+                    Routing Slip
+                  </h4>
                   <div className="bg-blue-50 p-4 rounded-lg space-y-4">
                     {/* Actions */}
                     <div>
-                      <p className="text-sm font-semibold text-gray-900 mb-2">Actions Required:</p>
+                      <p className="text-sm font-semibold text-gray-900 mb-2">
+                        Actions Required:
+                      </p>
                       <div className="space-y-1">
                         {selectedDoc.routingSlip.actions.map((action, idx) => (
-                          <div key={idx} className="flex items-center gap-2 text-sm text-gray-700">
+                          <div
+                            key={idx}
+                            className="flex items-center gap-2 text-sm text-gray-700"
+                          >
                             <div className="w-2 h-2 bg-primary rounded-full"></div>
                             {action}
                           </div>
@@ -1320,8 +1595,12 @@ export default function Dashboard() {
                     {/* Remarks */}
                     {selectedDoc.routingSlip.remarks && (
                       <div>
-                        <p className="text-sm font-semibold text-gray-900 mb-2">Remarks:</p>
-                        <p className="text-sm text-gray-700 italic">{selectedDoc.routingSlip.remarks}</p>
+                        <p className="text-sm font-semibold text-gray-900 mb-2">
+                          Remarks:
+                        </p>
+                        <p className="text-sm text-gray-700 italic">
+                          {selectedDoc.routingSlip.remarks}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -1330,7 +1609,9 @@ export default function Dashboard() {
 
               {/* Document History */}
               <div className="border-t pt-6">
-                <h4 className="font-semibold text-gray-900 mb-4">Document Audit Log</h4>
+                <h4 className="font-semibold text-gray-900 mb-4">
+                  Document Audit Log
+                </h4>
                 <div className="space-y-4">
                   {selectedDoc.history.map((entry, idx) => (
                     <div key={idx} className="flex gap-4">
@@ -1341,7 +1622,9 @@ export default function Dashboard() {
                         )}
                       </div>
                       <div className="pb-4">
-                        <p className="font-medium text-gray-900">{entry.action}</p>
+                        <p className="font-medium text-gray-900">
+                          {entry.action}
+                        </p>
                         <p className="text-sm text-gray-500">
                           {entry.date} • By {entry.by}
                         </p>
@@ -1388,7 +1671,11 @@ export default function Dashboard() {
             {/* Scanner viewport */}
             {!scanResult && !scannerError && (
               <div className="relative bg-black">
-                <div id="qr-scanner-container" className="w-full" style={{ minHeight: 300 }} />
+                <div
+                  id="qr-scanner-container"
+                  className="w-full"
+                  style={{ minHeight: 300 }}
+                />
                 {/* Corner guides */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className="w-48 h-48 relative">
@@ -1407,8 +1694,12 @@ export default function Dashboard() {
                 <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
                   <Camera className="w-8 h-8 text-red-500" />
                 </div>
-                <p className="text-red-600 text-sm font-medium">{scannerError}</p>
-                <p className="text-gray-500 text-xs">Make sure you allowed camera access in your browser settings.</p>
+                <p className="text-red-600 text-sm font-medium">
+                  {scannerError}
+                </p>
+                <p className="text-gray-500 text-xs">
+                  Make sure you allowed camera access in your browser settings.
+                </p>
               </div>
             )}
 
@@ -1418,7 +1709,9 @@ export default function Dashboard() {
                 <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto">
                   <QrCode className="w-8 h-8 text-yellow-600" />
                 </div>
-                <p className="text-gray-800 text-sm font-medium">{scanResult}</p>
+                <p className="text-gray-800 text-sm font-medium">
+                  {scanResult}
+                </p>
               </div>
             )}
 
@@ -1426,7 +1719,8 @@ export default function Dashboard() {
             <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
               {!scanResult && !scannerError ? (
                 <p className="text-xs text-gray-500 text-center">
-                  Point the camera at an MPDO document QR code to open it instantly.
+                  Point the camera at an MPDO document QR code to open it
+                  instantly.
                 </p>
               ) : (
                 <button
@@ -1452,8 +1746,12 @@ export default function Dashboard() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="text-center">
-              <h3 className="text-xl font-bold text-gray-900">{selectedDoc.title}</h3>
-              <p className="text-sm text-gray-500 font-mono mt-1">{selectedDoc.id}</p>
+              <h3 className="text-xl font-bold text-gray-900">
+                {selectedDoc.title}
+              </h3>
+              <p className="text-sm text-gray-500 font-mono mt-1">
+                {selectedDoc.id}
+              </p>
             </div>
             <div id="qr-modal-svg" className="p-4 bg-white rounded-xl border-4 border-primary/20 shadow-inner">
               <QRCodeSVG
@@ -1464,8 +1762,12 @@ export default function Dashboard() {
               />
             </div>
             <div className="text-center space-y-1">
-              <p className="text-xs text-gray-500 uppercase font-semibold tracking-wide">Scan to verify document</p>
-              <p className="text-xs text-gray-400">{selectedDoc.status} · {selectedDoc.source}</p>
+              <p className="text-xs text-gray-500 uppercase font-semibold tracking-wide">
+                Scan to verify document
+              </p>
+              <p className="text-xs text-gray-400">
+                {selectedDoc.status} · {selectedDoc.source}
+              </p>
             </div>
             <button
               onClick={exportQrCode}
@@ -1489,9 +1791,12 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-md w-full">
             <div className="bg-red-100 border-l-4 border-red-500 p-6">
-              <h3 className="font-bold text-red-900 text-lg">Delete Document</h3>
+              <h3 className="font-bold text-red-900 text-lg">
+                Delete Document
+              </h3>
               <p className="text-red-700 text-sm mt-2">
-                Are you sure you want to delete this document? This action cannot be undone.
+                Are you sure you want to delete this document? This action
+                cannot be undone.
               </p>
             </div>
 
@@ -1508,21 +1813,26 @@ export default function Dashboard() {
               </Button>
               <Button
                 onClick={async () => {
-                  if (deletingDocId) {
-                    try {
-                      await deleteDocument(deletingDocId);
-                      setDocuments((prev) => prev.filter((d) => d.id !== deletingDocId));
-                    } catch (err) {
-                      console.error("Failed to delete document:", err);
-                    }
+                  if (!deletingDocId || isDeleting) return;
+                  setIsDeleting(true);
+                  try {
+                    await deleteDocument(deletingDocId);
+                    setDocuments((prev) => prev.filter((d) => d.id !== deletingDocId));
+                    toast.success("Document and all files deleted.");
+                    setShowDeleteConfirm(false);
+                    setSelectedDoc(null);
+                    setDeletingDocId(null);
+                  } catch (err: any) {
+                    console.error("Failed to delete document:", err);
+                    toast.error(err.message || "Failed to delete document.");
+                  } finally {
+                    setIsDeleting(false);
                   }
-                  setShowDeleteConfirm(false);
-                  setSelectedDoc(null);
-                  setDeletingDocId(null);
                 }}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                disabled={isDeleting}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Delete
+                {isDeleting ? "Deleting..." : "Delete"}
               </Button>
             </div>
           </div>
@@ -1534,17 +1844,23 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-lg w-full">
             <div className="bg-blue-100 border-l-4 border-blue-500 p-6">
-              <h3 className="font-bold text-blue-900 text-lg">Internal MPDO Approval Workflow</h3>
+              <h3 className="font-bold text-blue-900 text-lg">
+                Internal MPDO Approval Workflow
+              </h3>
               <p className="text-blue-700 text-sm mt-2">
-                Document: <span className="font-semibold">{selectedDoc.title}</span>
+                Document:{" "}
+                <span className="font-semibold">{selectedDoc.title}</span>
               </p>
             </div>
 
             <div className="p-6 space-y-4">
               <div>
-                <p className="text-sm font-semibold text-gray-900 mb-2">This document is now pending for approval.</p>
+                <p className="text-sm font-semibold text-gray-900 mb-2">
+                  This document is now pending for approval.
+                </p>
                 <p className="text-sm text-gray-600 mb-4">
-                  Please add any remarks or comments before approving this document for the next stage.
+                  Please add any remarks or comments before approving this
+                  document for the next stage.
                 </p>
               </div>
 
@@ -1563,7 +1879,8 @@ export default function Dashboard() {
 
               <div className="bg-blue-50 p-4 rounded-lg">
                 <p className="text-sm text-gray-700">
-                  <span className="font-semibold">Status:</span> This document will be marked as "Approved" and routed accordingly.
+                  <span className="font-semibold">Status:</span> This document
+                  will be marked as "Approved" and routed accordingly.
                 </p>
               </div>
 
@@ -1580,24 +1897,29 @@ export default function Dashboard() {
                 </Button>
                 <Button
                   onClick={async () => {
-                    if (selectedDoc) {
-                      try {
-                        await updateDocument(selectedDoc.id, { status: "Approved" });
-                        await addAuditLog(selectedDoc.id, "Document Approved", user?.name || "Admin", approvalRemarks || "Approved by admin");
-                        const updated = await getDocuments();
-                        setDocuments(updated);
-                        const refreshed = updated.find((d) => d.id === selectedDoc.id);
-                        if (refreshed) setSelectedDoc(refreshed);
-                      } catch (err) {
-                        console.error("Failed to approve document:", err);
-                      }
+                    if (!selectedDoc || isApproving) return;
+                    setIsApproving(true);
+                    try {
+                      await updateDocument(selectedDoc.id, { status: "Approved" });
+                      await addAuditLog(selectedDoc.id, "Document Approved", user?.name || "Admin", approvalRemarks || "Approved by admin");
+                      const updated = await getDocuments();
+                      setDocuments(updated);
+                      const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                      if (refreshed) setSelectedDoc(refreshed);
+                      toast.success("Document approved successfully.");
+                    } catch (err) {
+                      console.error("Failed to approve document:", err);
+                      toast.error("Failed to approve document.");
+                    } finally {
+                      setIsApproving(false);
+                      setShowApprovalWorkflow(false);
+                      setApprovalRemarks("");
                     }
-                    setShowApprovalWorkflow(false);
-                    setApprovalRemarks("");
                   }}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  disabled={isApproving}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Approve
+                  {isApproving ? "Approving..." : "Approve"}
                 </Button>
               </div>
             </div>
@@ -1605,13 +1927,14 @@ export default function Dashboard() {
         </div>
       )}
 
-
       {/* Done Confirmation Modal - for Staff */}
       {showDoneConfirm && selectedDoc && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-md w-full">
             <div className="bg-blue-50 p-6 text-center">
-              <h3 className="text-2xl font-bold text-blue-900 mb-2">Document Completed</h3>
+              <h3 className="text-2xl font-bold text-blue-900 mb-2">
+                Document Completed
+              </h3>
               <p className="text-blue-700 text-lg font-semibold">
                 RETURNED TO {selectedDoc.source.toUpperCase()}
               </p>
@@ -1619,26 +1942,32 @@ export default function Dashboard() {
 
             <div className="p-6 bg-gray-50">
               <p className="text-gray-700 text-center mb-6">
-                This document has been marked as done and returned to its source.
+                This document has been marked as done and returned to its
+                source.
               </p>
               <Button
                 onClick={async () => {
-                  if (selectedDoc) {
-                    try {
-                      await updateDocument(selectedDoc.id, { status: "Approved" });
-                      await addAuditLog(selectedDoc.id, "Marked as Done", user?.name || "Staff", `Returned to ${selectedDoc.source}`);
-                      const updated = await getDocuments();
-                      setDocuments(updated);
-                    } catch (err) {
-                      console.error("Failed to mark as done:", err);
-                    }
+                  if (!selectedDoc || isMarkingDone) return;
+                  setIsMarkingDone(true);
+                  try {
+                    await updateDocument(selectedDoc.id, { status: "Approved" });
+                    await addAuditLog(selectedDoc.id, "Marked as Done", user?.name || "Staff", `Returned to ${selectedDoc.source}`);
+                    const updated = await getDocuments();
+                    setDocuments(updated);
+                    toast.success("Document marked as done.");
+                  } catch (err) {
+                    console.error("Failed to mark as done:", err);
+                    toast.error("Failed to mark as done.");
+                  } finally {
+                    setIsMarkingDone(false);
+                    setShowDoneConfirm(false);
+                    setSelectedDoc(null);
                   }
-                  setShowDoneConfirm(false);
-                  setSelectedDoc(null);
                 }}
-                className="w-full bg-primary hover:bg-primary/90 text-white"
+                disabled={isMarkingDone}
+                className="w-full bg-primary hover:bg-primary/90 text-white disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Confirm
+                {isMarkingDone ? "Processing..." : "Confirm"}
               </Button>
             </div>
           </div>
@@ -1673,7 +2002,12 @@ export default function Dashboard() {
                 <input
                   type="text"
                   value={newEmployeeData.name}
-                  onChange={(e) => setNewEmployeeData({ ...newEmployeeData, name: e.target.value })}
+                  onChange={(e) =>
+                    setNewEmployeeData({
+                      ...newEmployeeData,
+                      name: e.target.value,
+                    })
+                  }
                   placeholder="Enter full name"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 />
@@ -1685,7 +2019,12 @@ export default function Dashboard() {
                 </label>
                 <select
                   value={newEmployeeData.unit}
-                  onChange={(e) => setNewEmployeeData({ ...newEmployeeData, unit: e.target.value })}
+                  onChange={(e) =>
+                    setNewEmployeeData({
+                      ...newEmployeeData,
+                      unit: e.target.value,
+                    })
+                  }
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
                 >
                   <option value="MPDC">MPDC</option>
@@ -1697,7 +2036,9 @@ export default function Dashboard() {
 
               <div className="bg-blue-50 p-3 rounded-lg">
                 <p className="text-sm text-blue-700">
-                  <span className="font-semibold">Email:</span> {newEmployeeData.name.toLowerCase().replace(/\s+/g, ".")}@alubijid.gov.ph
+                  <span className="font-semibold">Email:</span>{" "}
+                  {newEmployeeData.name.toLowerCase().replace(/\s+/g, ".")}
+                  @alubijid.gov.ph
                 </p>
               </div>
 
@@ -1728,13 +2069,22 @@ export default function Dashboard() {
       {/* Document Wizard Modal */}
       {showUploadModal && (
         <DocumentWizard
+          isSubmitting={isSubmitting}
           onClose={() => {
             setShowUploadModal(false);
-            setUploadFormData({ title: "", documentType: "", source: "", assignedTo: "", deadline: "" });
+            setUploadFormData({
+              title: "",
+              documentType: "",
+              source: "",
+              assignedTo: "",
+              deadline: "",
+            });
             setSelectedRoutingActions([]);
             setRoutingRemarks("");
           }}
           onSubmit={async (wizardData) => {
+            if (isSubmitting) return;
+            setIsSubmitting(true);
             try {
               const dtn = await createDocument(
                 {
@@ -1754,7 +2104,7 @@ export default function Dashboard() {
                 },
                 wizardData.routingActions,
                 wizardData.routingRemarks,
-                user?.name || "Admin"
+                user?.name || "Admin",
               );
 
               // Upload attached file to Google Drive under the new document
@@ -1770,9 +2120,18 @@ export default function Dashboard() {
               setDocuments(updated);
             } catch (err) {
               console.error("Failed to create document:", err);
+              toast.error("Failed to create document.");
+            } finally {
+              setIsSubmitting(false);
             }
             setShowUploadModal(false);
-            setUploadFormData({ title: "", documentType: "", source: "", assignedTo: "", deadline: "" });
+            setUploadFormData({
+              title: "",
+              documentType: "",
+              source: "",
+              assignedTo: "",
+              deadline: "",
+            });
             setSelectedRoutingActions([]);
             setRoutingRemarks("");
           }}

@@ -7,6 +7,7 @@ import { RoutingAction } from "@shared/api";
 
 interface DocumentWizardProps {
   onClose: () => void;
+  isSubmitting?: boolean;
   onSubmit: (formData: {
     title: string;
     documentType: string;
@@ -20,9 +21,17 @@ interface DocumentWizardProps {
   }) => void;
 }
 
+const defaultDocumentTypes = [
+  "Infrastructure",
+  "Planning",
+  "Development",
+  "Environmental",
+];
+
 export default function DocumentWizard({
   onClose,
   onSubmit,
+  isSubmitting = false,
 }: DocumentWizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -49,6 +58,10 @@ export default function DocumentWizard({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [customDocumentTypes, setCustomDocumentTypes] = useState<string[]>([]);
+  const [customSources, setCustomSources] = useState<string[]>([]);
+  const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
+  const [newSourceName, setNewSourceName] = useState("");
 
   useEffect(() => {
     const loadEmployees = async () => {
@@ -56,6 +69,16 @@ export default function DocumentWizard({
       setEmployees(data);
     };
     loadEmployees();
+
+    // Load custom types and sources from localStorage
+    const savedCustomTypes = localStorage.getItem("customDocumentTypes");
+    const savedCustomSources = localStorage.getItem("customSources");
+    if (savedCustomTypes) {
+      setCustomDocumentTypes(JSON.parse(savedCustomTypes));
+    }
+    if (savedCustomSources) {
+      setCustomSources(JSON.parse(savedCustomSources));
+    }
   }, []);
 
   const handleNext = () => {
@@ -67,6 +90,26 @@ export default function DocumentWizard({
   const handleBack = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const handleAddCustomDocumentType = () => {
+    if (newDocumentTypeName.trim() && !customDocumentTypes.includes(newDocumentTypeName.trim())) {
+      const updated = [...customDocumentTypes, newDocumentTypeName.trim()];
+      setCustomDocumentTypes(updated);
+      localStorage.setItem("customDocumentTypes", JSON.stringify(updated));
+      setFormData({ ...formData, documentType: newDocumentTypeName.trim() });
+      setNewDocumentTypeName("");
+    }
+  };
+
+  const handleAddCustomSource = () => {
+    if (newSourceName.trim() && !customSources.includes(newSourceName.trim())) {
+      const updated = [...customSources, newSourceName.trim()];
+      setCustomSources(updated);
+      localStorage.setItem("customSources", JSON.stringify(updated));
+      setFormData({ ...formData, source: newSourceName.trim() });
+      setNewSourceName("");
     }
   };
 
@@ -166,11 +209,41 @@ export default function DocumentWizard({
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
                 >
                   <option value="">Select Type</option>
-                  <option value="Infrastructure">Infrastructure</option>
-                  <option value="Planning">Planning</option>
-                  <option value="Development">Development</option>
-                  <option value="Environmental">Environmental</option>
+                  {defaultDocumentTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                  {customDocumentTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                  <option value="Others">Others</option>
                 </select>
+                {formData.documentType === "Others" && (
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      type="text"
+                      value={newDocumentTypeName}
+                      onChange={(e) => setNewDocumentTypeName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          handleAddCustomDocumentType();
+                        }
+                      }}
+                      placeholder="Enter new document type"
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <button
+                      onClick={handleAddCustomDocumentType}
+                      className="p-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition"
+                      title="Confirm"
+                    >
+                      <CheckCircle className="w-5 h-5" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -190,7 +263,36 @@ export default function DocumentWizard({
                       {loc}
                     </option>
                   ))}
+                  {customSources.map((src) => (
+                    <option key={src} value={src}>
+                      {src}
+                    </option>
+                  ))}
+                  <option value="Others">Others</option>
                 </select>
+                {formData.source === "Others" && (
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      type="text"
+                      value={newSourceName}
+                      onChange={(e) => setNewSourceName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          handleAddCustomSource();
+                        }
+                      }}
+                      placeholder="Enter new source"
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <button
+                      onClick={handleAddCustomSource}
+                      className="p-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition"
+                      title="Confirm"
+                    >
+                      <CheckCircle className="w-5 h-5" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -473,11 +575,23 @@ export default function DocumentWizard({
           ) : (
             <Button
               onClick={handleSubmit}
-              disabled={!isStep3Valid}
-              className={`bg-primary hover:bg-primary/90 text-white flex gap-2 ${!isStep3Valid ? "opacity-50 cursor-not-allowed" : ""}`}
+              disabled={!isStep3Valid || isSubmitting}
+              className={`bg-primary hover:bg-primary/90 text-white flex gap-2 ${(!isStep3Valid || isSubmitting) ? "opacity-50 cursor-not-allowed" : ""}`}
             >
-              <Upload className="w-4 h-4" />
-              Create Document
+              {isSubmitting ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  Create Document
+                </>
+              )}
             </Button>
           )}
         </div>

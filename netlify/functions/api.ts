@@ -105,7 +105,7 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
 
     const driveRes = await drive.files.create({
       requestBody: { name: req.file.originalname, parents: [folderId!] },
-      media: { mimeType: req.file.mimetype, body: Readable.from(req.file.buffer) },
+      media: { mimeType: req.file.mimetype, body: Readable.from([req.file.buffer]) },
       fields: "id, webViewLink",
     });
 
