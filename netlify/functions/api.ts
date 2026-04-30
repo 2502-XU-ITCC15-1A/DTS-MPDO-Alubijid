@@ -114,24 +114,34 @@ app.delete("/api/delete-employee/:id", async (req, res) => {
   res.json({ success: true });
 });
 
-// Get or create a subfolder by document ID in Google Drive
-async function getOrCreateFolder(documentId: string) {
-  const parentId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+// Get or create a folder by name inside a given parent
+async function getOrCreateFolderIn(name: string, parentId: string): Promise<string> {
   const search = await drive.files.list({
-    q: `name='${documentId}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`,
+    q: `name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`,
     fields: "files(id)",
   });
-  if (search.data.files!.length > 0) return search.data.files![0].id;
+  if (search.data.files!.length > 0) return search.data.files![0].id!;
 
   const folder = await drive.files.create({
-    requestBody: {
-      name: documentId,
-      mimeType: "application/vnd.google-apps.folder",
-      parents: [parentId!],
-    },
+    requestBody: { name, mimeType: "application/vnd.google-apps.folder", parents: [parentId] },
     fields: "id",
   });
-  return folder.data.id;
+  return folder.data.id!;
+}
+
+function getMonthFolderName(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const monthName = date.toLocaleString("en-US", { month: "long" });
+  return `${year}-${month} - ${monthName} ${year}`;
+}
+
+// Get or create: Root → Month → Document folder
+async function getOrCreateFolder(documentId: string, date = new Date()): Promise<string> {
+  const rootId = process.env.GOOGLE_DRIVE_FOLDER_ID!;
+  const monthName = getMonthFolderName(date);
+  const monthFolderId = await getOrCreateFolderIn(monthName, rootId);
+  return await getOrCreateFolderIn(documentId, monthFolderId);
 }
 
 // Upload file to Google Drive (multipart form)
@@ -161,14 +171,13 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
   }
 });
 
-// Delete Google Drive folder for a document
+// Delete Google Drive folder for a document (searches across all month folders)
 app.delete("/api/delete-folder/:documentId", async (req, res) => {
   try {
     const { documentId } = req.params;
-    const parentId = process.env.GOOGLE_DRIVE_FOLDER_ID;
 
     const search = await drive.files.list({
-      q: `name='${documentId}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`,
+      q: `name='${documentId}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
       fields: "files(id)",
     });
 
