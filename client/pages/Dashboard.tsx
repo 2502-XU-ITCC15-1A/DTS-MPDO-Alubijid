@@ -202,10 +202,10 @@ export default function Dashboard() {
     unit: "MPDC",
   });
   const [customDocumentTypes, setCustomDocumentTypes] = useState<string[]>(() =>
-    JSON.parse(localStorage.getItem("customDocumentTypes") || "[]")
+    JSON.parse(localStorage.getItem("customDocumentTypes") || "[]"),
   );
   const [customSources, setCustomSources] = useState<string[]>(() =>
-    JSON.parse(localStorage.getItem("customSources") || "[]")
+    JSON.parse(localStorage.getItem("customSources") || "[]"),
   );
   const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
   const [newSourceName, setNewSourceName] = useState("");
@@ -361,7 +361,8 @@ export default function Dashboard() {
     if (!selectedDoc || isSaving) return;
     setIsSaving(true);
 
-    const newStatus = (editForm.status as Document["status"]) || selectedDoc.status;
+    const newStatus =
+      (editForm.status as Document["status"]) || selectedDoc.status;
     const actor = user?.name || "Admin";
 
     try {
@@ -375,21 +376,50 @@ export default function Dashboard() {
 
       // Log every field that actually changed
       if (newStatus !== selectedDoc.status) {
-        await addAuditLog(selectedDoc.id, "Status Updated", actor, `"${selectedDoc.status}" → "${newStatus}"`);
+        await addAuditLog(
+          selectedDoc.id,
+          "Status Updated",
+          actor,
+          `"${selectedDoc.status}" → "${newStatus}"`,
+        );
       }
       if (editForm.assignedTo !== selectedDoc.assignedTo) {
-        const oldName = employees.find((e) => e.email === selectedDoc.assignedTo)?.name || selectedDoc.assignedTo;
-        const newName = employees.find((e) => e.email === editForm.assignedTo)?.name || editForm.assignedTo;
-        await addAuditLog(selectedDoc.id, "Reassigned", actor, `"${oldName}" → "${newName}"`);
+        const oldName =
+          employees.find((e) => e.email === selectedDoc.assignedTo)?.name ||
+          selectedDoc.assignedTo;
+        const newName =
+          employees.find((e) => e.email === editForm.assignedTo)?.name ||
+          editForm.assignedTo;
+        await addAuditLog(
+          selectedDoc.id,
+          "Reassigned",
+          actor,
+          `"${oldName}" → "${newName}"`,
+        );
       }
       if (editForm.source !== selectedDoc.source) {
-        await addAuditLog(selectedDoc.id, "Source Updated", actor, `"${selectedDoc.source}" → "${editForm.source}"`);
+        await addAuditLog(
+          selectedDoc.id,
+          "Source Updated",
+          actor,
+          `"${selectedDoc.source}" → "${editForm.source}"`,
+        );
       }
       if (editForm.deadline !== selectedDoc.deadline) {
-        await addAuditLog(selectedDoc.id, "Deadline Updated", actor, `"${selectedDoc.deadline}" → "${editForm.deadline}"`);
+        await addAuditLog(
+          selectedDoc.id,
+          "Deadline Updated",
+          actor,
+          `"${selectedDoc.deadline}" → "${editForm.deadline}"`,
+        );
       }
       if ((editForm.destination || "") !== (selectedDoc.destination || "")) {
-        await addAuditLog(selectedDoc.id, "Destination Updated", actor, `"${selectedDoc.destination || "None"}" → "${editForm.destination || "None"}"`);
+        await addAuditLog(
+          selectedDoc.id,
+          "Destination Updated",
+          actor,
+          `"${selectedDoc.destination || "None"}" → "${editForm.destination || "None"}"`,
+        );
       }
 
       // Refresh from DB so the audit log section shows the new entries immediately
@@ -415,7 +445,12 @@ export default function Dashboard() {
       const doc = documents.find((d) => d.id === docId);
       const oldStatus = doc?.status || "";
       await updateDocument(docId, { status: value });
-      await addAuditLog(docId, "Status Updated", user?.name || "Admin", `"${oldStatus}" → "${value}"`);
+      await addAuditLog(
+        docId,
+        "Status Updated",
+        user?.name || "Admin",
+        `"${oldStatus}" → "${value}"`,
+      );
       setDocuments((prev) =>
         prev.map((doc) =>
           doc.id === docId
@@ -490,9 +525,13 @@ export default function Dashboard() {
 
   // Filter by search (DTN or document name), document type, assignment, and deadline
   const filteredDocuments = visibleDocuments.filter((doc) => {
-    const matchesSearch = doc.id.toLowerCase().includes(searchQuery.toLowerCase()) || doc.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesDocType = selectedFilter === "all" || doc.documentType === selectedFilter;
-    const matchesAssignment = filterAssignedTo === "all" || doc.assignedTo === filterAssignedTo;
+    const matchesSearch =
+      doc.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesDocType =
+      selectedFilter === "all" || doc.documentType === selectedFilter;
+    const matchesAssignment =
+      filterAssignedTo === "all" || doc.assignedTo === filterAssignedTo;
 
     let matchesDeadline = true;
     if (filterDeadline !== "all") {
@@ -518,7 +557,13 @@ export default function Dashboard() {
     );
   });
 
-  const isProcessing = isSaving || isSubmitting || isApproving || isMarkingDone || isDeleting || isUploading;
+  const isProcessing =
+    isSaving ||
+    isSubmitting ||
+    isApproving ||
+    isMarkingDone ||
+    isDeleting ||
+    isUploading;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -790,7 +835,6 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* Document Type Filter */}
               {/* Assignment Filter - admin only */}
               {user?.role === "admin" && (
                 <select
@@ -823,7 +867,6 @@ export default function Dashboard() {
                   <option value="upcoming">Upcoming</option>
                 </select>
               )}
-
             </div>
           </div>
 
@@ -1079,9 +1122,24 @@ export default function Dashboard() {
                           title={isSaving ? "Saving..." : "Save"}
                         >
                           {isSaving ? (
-                            <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                            <svg
+                              className="w-5 h-5 animate-spin"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              />
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8v8z"
+                              />
                             </svg>
                           ) : (
                             <CheckCircle className="w-5 h-5" />
@@ -1122,13 +1180,20 @@ export default function Dashboard() {
               {/* Key Information Grid */}
               <div className="grid grid-cols-3 gap-4 items-start">
                 <div>
-                  <p className="text-xs text-gray-500 uppercase font-semibold">Type</p>
+                  <p className="text-xs text-gray-500 uppercase font-semibold">
+                    Type
+                  </p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <div className="mt-1">
                       <select
                         className="text-base font-medium text-gray-900 px-2 py-1 border border-gray-300 rounded w-full"
                         value={editForm.documentType || ""}
-                        onChange={(e) => setEditForm({ ...editForm, documentType: e.target.value })}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            documentType: e.target.value,
+                          })
+                        }
                       >
                         <option value="">Select Type</option>
                         <option value="Infrastructure">Infrastructure</option>
@@ -1136,7 +1201,9 @@ export default function Dashboard() {
                         <option value="Development">Development</option>
                         <option value="Environmental">Environmental</option>
                         {customDocumentTypes.map((type) => (
-                          <option key={type} value={type}>{type}</option>
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
                         ))}
                         <option value="Others">Others</option>
                       </select>
@@ -1145,7 +1212,9 @@ export default function Dashboard() {
                           <input
                             type="text"
                             value={newDocumentTypeName}
-                            onChange={(e) => setNewDocumentTypeName(e.target.value)}
+                            onChange={(e) =>
+                              setNewDocumentTypeName(e.target.value)
+                            }
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 handleAddCustomDocumentType();
@@ -1165,7 +1234,9 @@ export default function Dashboard() {
                       )}
                     </div>
                   ) : (
-                    <p className="text-lg font-medium text-gray-900 mt-1">{selectedDoc.type}</p>
+                    <p className="text-lg font-medium text-gray-900 mt-1">
+                      {selectedDoc.type}
+                    </p>
                   )}
                 </div>
                 <div>
@@ -1177,13 +1248,19 @@ export default function Dashboard() {
                       <select
                         className="text-base font-medium text-gray-900 px-2 py-1 border border-gray-300 rounded w-full"
                         value={editForm.source || ""}
-                        onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, source: e.target.value })
+                        }
                       >
                         {locations.map((loc) => (
-                          <option key={loc} value={loc}>{loc}</option>
+                          <option key={loc} value={loc}>
+                            {loc}
+                          </option>
                         ))}
                         {customSources.map((src) => (
-                          <option key={src} value={src}>{src}</option>
+                          <option key={src} value={src}>
+                            {src}
+                          </option>
                         ))}
                         <option value="Others">Others</option>
                       </select>
@@ -1755,7 +1832,9 @@ export default function Dashboard() {
                   setIsDeleting(true);
                   try {
                     await deleteDocument(deletingDocId);
-                    setDocuments((prev) => prev.filter((d) => d.id !== deletingDocId));
+                    setDocuments((prev) =>
+                      prev.filter((d) => d.id !== deletingDocId),
+                    );
                     toast.success("Document and all files deleted.");
                     setShowDeleteConfirm(false);
                     setSelectedDoc(null);
@@ -1838,11 +1917,20 @@ export default function Dashboard() {
                     if (!selectedDoc || isApproving) return;
                     setIsApproving(true);
                     try {
-                      await updateDocument(selectedDoc.id, { status: "Approved" });
-                      await addAuditLog(selectedDoc.id, "Document Approved", user?.name || "Admin", approvalRemarks || "Approved by admin");
+                      await updateDocument(selectedDoc.id, {
+                        status: "Approved",
+                      });
+                      await addAuditLog(
+                        selectedDoc.id,
+                        "Document Approved",
+                        user?.name || "Admin",
+                        approvalRemarks || "Approved by admin",
+                      );
                       const updated = await getDocuments();
                       setDocuments(updated);
-                      const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                      const refreshed = updated.find(
+                        (d) => d.id === selectedDoc.id,
+                      );
                       if (refreshed) setSelectedDoc(refreshed);
                       toast.success("Document approved successfully.");
                     } catch (err) {
@@ -1888,8 +1976,15 @@ export default function Dashboard() {
                   if (!selectedDoc || isMarkingDone) return;
                   setIsMarkingDone(true);
                   try {
-                    await updateDocument(selectedDoc.id, { status: "Approved" });
-                    await addAuditLog(selectedDoc.id, "Marked as Done", user?.name || "Staff", `Returned to ${selectedDoc.source}`);
+                    await updateDocument(selectedDoc.id, {
+                      status: "Approved",
+                    });
+                    await addAuditLog(
+                      selectedDoc.id,
+                      "Marked as Done",
+                      user?.name || "Staff",
+                      `Returned to ${selectedDoc.source}`,
+                    );
                     const updated = await getDocuments();
                     setDocuments(updated);
                     toast.success("Document marked as done.");
@@ -2036,7 +2131,9 @@ export default function Dashboard() {
                   assignedTo: wizardData.assignedTo,
                   deadline: wizardData.deadline,
                   source: wizardData.source,
-                  ...(wizardData.documentDirection === "Outgoing" && { destination: "LGU Office" }),
+                  ...(wizardData.documentDirection === "Outgoing" && {
+                    destination: "LGU Office",
+                  }),
                   createdAt: new Date().toISOString(),
                   updatedAt: new Date().toISOString(),
                 },
