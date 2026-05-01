@@ -348,14 +348,18 @@ export default function Dashboard() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [isPasswordChanging, setIsPasswordChanging] = useState(false);
-  const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
+  const [notifications, setNotifications] = useState<DashboardNotification[]>(
+    [],
+  );
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
   const notificationSeenRef = useRef(false);
   const [isApprovingDoc, setIsApprovingDoc] = useState(false);
   const [isRevisingDoc, setIsRevisingDoc] = useState(false);
 
-  const activeNotifications = notifications.filter((n) => !readNotificationIds.includes(n.id));
+  const activeNotifications = notifications.filter(
+    (n) => !readNotificationIds.includes(n.id),
+  );
   const unreadNotificationCount = activeNotifications.length;
 
   // Load employees and documents from Supabase on mount
@@ -433,7 +437,11 @@ export default function Dashboard() {
 
     setIsProfileSaving(true);
     try {
-      await updateEmployeeProfile(user.id, profileName.trim(), profileDepartment.trim() || null);
+      await updateEmployeeProfile(
+        user.id,
+        profileName.trim(),
+        profileDepartment.trim() || null,
+      );
       await refreshUserProfile();
       toast.success("Profile updated successfully.");
       setShowProfileModal(false);
@@ -490,7 +498,9 @@ export default function Dashboard() {
     }
   };
 
-  const calculateNotifications = (docs: Document[]): DashboardNotification[] => {
+  const calculateNotifications = (
+    docs: Document[],
+  ): DashboardNotification[] => {
     if (!user) return [];
 
     const now = new Date();
@@ -502,7 +512,9 @@ export default function Dashboard() {
 
         const createdDate = new Date(doc.createdAt || doc.submittedDate);
         const createdAge = now.getTime() - createdDate.getTime();
-        const isNew = !Number.isNaN(createdDate.getTime()) && createdAge <= 24 * 60 * 60 * 1000;
+        const isNew =
+          !Number.isNaN(createdDate.getTime()) &&
+          createdAge <= 24 * 60 * 60 * 1000;
 
         const deadlineDate = new Date(doc.deadline);
         const deadlineDiff = deadlineDate.getTime() - now.getTime();
@@ -529,7 +541,10 @@ export default function Dashboard() {
           return;
         }
 
-        if (isDueTomorrow && !["Completed", "Released", "Approved"].includes(doc.status)) {
+        if (
+          isDueTomorrow &&
+          !["Completed", "Released", "Approved"].includes(doc.status)
+        ) {
           notifications.push({
             id: `${doc.id}-deadline`,
             title: "Deadline approaching",
@@ -568,7 +583,13 @@ export default function Dashboard() {
           id: "admin-approval",
           title: "Documents need approval",
           message:
-            "There " + approvalVerb + " " + pending.length + " document" + approvalPlural + " waiting for admin approval.",
+            "There " +
+            approvalVerb +
+            " " +
+            pending.length +
+            " document" +
+            approvalPlural +
+            " waiting for admin approval.",
           severity: "urgent",
         });
       }
@@ -748,7 +769,7 @@ export default function Dashboard() {
       documentId,
       formatStatusChangeTitle(oldStatus, newStatus),
       actor,
-      [formatStatusChange(oldStatus, newStatus), note]
+      [formatStatusChangeTitle(oldStatus, newStatus), note]
         .filter(Boolean)
         .join(". "),
     );
@@ -1014,14 +1035,14 @@ export default function Dashboard() {
         (docDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
       );
 
-        if (filterDeadline === "overdue") matchesDeadline = daysUntilDeadline < 0;
-        else if (filterDeadline === "today")
-          matchesDeadline = daysUntilDeadline === 0;
-        else if (filterDeadline === "this-week")
-          matchesDeadline = daysUntilDeadline >= 0 && daysUntilDeadline <= 7;
-        else if (filterDeadline === "upcoming")
-          matchesDeadline = daysUntilDeadline > 7;
-      }
+      if (filterDeadline === "overdue") matchesDeadline = daysUntilDeadline < 0;
+      else if (filterDeadline === "today")
+        matchesDeadline = daysUntilDeadline === 0;
+      else if (filterDeadline === "this-week")
+        matchesDeadline = daysUntilDeadline >= 0 && daysUntilDeadline <= 7;
+      else if (filterDeadline === "upcoming")
+        matchesDeadline = daysUntilDeadline > 7;
+    }
 
     return (
       matchesSearch &&
@@ -1077,9 +1098,12 @@ export default function Dashboard() {
                   <div className="absolute right-0 mt-2 w-96 max-h-[420px] rounded-3xl border border-slate-200 bg-white/95 shadow-2xl backdrop-blur-xl z-50">
                     <div className="flex items-center justify-between gap-3 border-b border-slate-200/80 bg-slate-50 px-4 py-4">
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">Important announcements</p>
+                        <p className="text-sm font-semibold text-slate-900">
+                          Important announcements
+                        </p>
                         <p className="text-xs text-slate-500">
-                          {activeNotifications.length} unread notification{activeNotifications.length === 1 ? "" : "s"}
+                          {activeNotifications.length} unread notification
+                          {activeNotifications.length === 1 ? "" : "s"}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1119,7 +1143,9 @@ export default function Dashboard() {
                                 Array.from(new Set([...prev, note.id])),
                               );
                               if (note.docId) {
-                                const doc = documents.find((d) => d.id === note.docId);
+                                const doc = documents.find(
+                                  (d) => d.id === note.docId,
+                                );
                                 if (doc) setSelectedDoc(doc);
                               }
                               setShowNotificationPanel(false);
@@ -1128,22 +1154,32 @@ export default function Dashboard() {
                           >
                             <div className="flex items-center justify-between gap-2">
                               <div>
-                                <p className="text-sm font-semibold text-slate-900">{note.title}</p>
-                                <p className="mt-1 text-xs text-slate-500">Unread</p>
+                                <p className="text-sm font-semibold text-slate-900">
+                                  {note.title}
+                                </p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  Unread
+                                </p>
                               </div>
                               <span
                                 className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                                   note.severity === "urgent"
                                     ? "bg-red-100 text-red-700"
                                     : note.severity === "warning"
-                                    ? "bg-amber-100 text-amber-700"
-                                    : "bg-sky-100 text-sky-700"
+                                      ? "bg-amber-100 text-amber-700"
+                                      : "bg-sky-100 text-sky-700"
                                 }`}
                               >
-                                {note.severity === "urgent" ? "Urgent" : note.severity === "warning" ? "Warning" : "Info"}
+                                {note.severity === "urgent"
+                                  ? "Urgent"
+                                  : note.severity === "warning"
+                                    ? "Warning"
+                                    : "Info"}
                               </span>
                             </div>
-                            <p className="mt-3 text-sm leading-6 text-slate-600">{note.message}</p>
+                            <p className="mt-3 text-sm leading-6 text-slate-600">
+                              {note.message}
+                            </p>
                           </button>
                         ))
                       )}
@@ -1332,7 +1368,9 @@ export default function Dashboard() {
             </Button>
           </DialogFooter>
           <div className="mt-6 border-t border-slate-200 pt-4">
-            <p className="text-sm font-semibold text-slate-900">Change password</p>
+            <p className="text-sm font-semibold text-slate-900">
+              Change password
+            </p>
             <div className="grid gap-4 py-3">
               <div className="grid gap-2">
                 <Label htmlFor="current-password">Current password</Label>
@@ -1814,58 +1852,68 @@ export default function Dashboard() {
                       )}
 
                       {/* Approve button - only for documents sent for approval */}
-                      {selectedDoc.status === "Sent for approval" && docViewMode === "view" && (
-                        <button
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            setIsApprovingDoc(true);
-                            try {
-                              await approveDocument(
-                                selectedDoc.id,
-                                user?.name || "Admin",
-                                selectedDoc.status,
-                              );
-                              const updated = await getDocuments();
-                              setDocuments(updated);
-                              const refreshed = updated.find((d) => d.id === selectedDoc.id);
-                              if (refreshed) setSelectedDoc(refreshed);
-                              toast.success("Document approved successfully.");
-                            } catch (err: any) {
-                              console.error("Failed to approve document:", err);
-                              toast.error(err.message || "Failed to approve document.");
-                            } finally {
-                              setIsApprovingDoc(false);
-                            }
-                          }}
-                          disabled={isApprovingDoc}
-                          className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-100 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
-                          title={isApprovingDoc ? "Approving..." : "Approve"}
-                        >
-                          {isApprovingDoc ? (
-                            <svg
-                              className="w-5 h-5 animate-spin"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                            >
-                              <circle
-                                className="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                strokeWidth="4"
-                              />
-                              <path
-                                className="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8v8z"
-                              />
-                            </svg>
-                          ) : (
-                            <CheckCircle className="w-5 h-5" />
-                          )}
-                        </button>
-                      )}
+                      {selectedDoc.status === "Sent for approval" &&
+                        docViewMode === "view" && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              setIsApprovingDoc(true);
+                              try {
+                                await approveDocument(
+                                  selectedDoc.id,
+                                  user?.name || "Admin",
+                                  selectedDoc.status,
+                                );
+                                const updated = await getDocuments();
+                                setDocuments(updated);
+                                const refreshed = updated.find(
+                                  (d) => d.id === selectedDoc.id,
+                                );
+                                if (refreshed) setSelectedDoc(refreshed);
+                                toast.success(
+                                  "Document approved successfully.",
+                                );
+                              } catch (err: any) {
+                                console.error(
+                                  "Failed to approve document:",
+                                  err,
+                                );
+                                toast.error(
+                                  err.message || "Failed to approve document.",
+                                );
+                              } finally {
+                                setIsApprovingDoc(false);
+                              }
+                            }}
+                            disabled={isApprovingDoc}
+                            className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-100 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={isApprovingDoc ? "Approving..." : "Approve"}
+                          >
+                            {isApprovingDoc ? (
+                              <svg
+                                className="w-5 h-5 animate-spin"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                              >
+                                <circle
+                                  className="opacity-25"
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                />
+                                <path
+                                  className="opacity-75"
+                                  fill="currentColor"
+                                  d="M4 12a8 8 0 018-8v8z"
+                                />
+                              </svg>
+                            ) : (
+                              <CheckCircle className="w-5 h-5" />
+                            )}
+                          </button>
+                        )}
 
                       {/* Revise button - only for documents sent for approval */}
                       {selectedDoc.status === "Sent for approval" &&
@@ -3262,4 +3310,8 @@ export default function Dashboard() {
       )}
     </div>
   );
+}
+
+function formatStatusChangeTitle(oldStatus: string, newStatus: string): string {
+  throw new Error("Function not implemented.");
 }
