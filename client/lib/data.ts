@@ -52,13 +52,14 @@ export async function updateEmployeeProfile(
   id: string,
   name: string,
   department: string | null,
+  personal_email?: string | null,
 ) {
   const response = await fetch("/api/user/update-profile", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ id, name, department }),
+    body: JSON.stringify({ id, name, department, personal_email }),
   });
 
   if (!response.ok) {

@@ -343,6 +343,7 @@ export default function Dashboard() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [profileDepartment, setProfileDepartment] = useState("");
+  const [profilePersonalEmail, setProfilePersonalEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -422,6 +423,7 @@ export default function Dashboard() {
     if (!user) return;
     setProfileName(user.name || "");
     setProfileDepartment(user.department || "");
+    setProfilePersonalEmail(user.personal_email || "");
   }, [user]);
 
   const handleSaveProfile = async () => {
@@ -430,10 +432,19 @@ export default function Dashboard() {
       toast.error("Name cannot be empty.");
       return;
     }
+    if (profilePersonalEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profilePersonalEmail)) {
+      toast.error("Please enter a valid personal email address.");
+      return;
+    }
 
     setIsProfileSaving(true);
     try {
-      await updateEmployeeProfile(user.id, profileName.trim(), profileDepartment.trim() || null);
+      await updateEmployeeProfile(
+        user.id,
+        profileName.trim(),
+        profileDepartment.trim() || null,
+        profilePersonalEmail.trim() || null,
+      );
       await refreshUserProfile();
       toast.success("Profile updated successfully.");
       setShowProfileModal(false);
@@ -1290,80 +1301,121 @@ export default function Dashboard() {
       </header>
 
       <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Update profile</DialogTitle>
-            <DialogDescription>
-              Change your name, department, and password securely.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="profile-name">Name</Label>
-              <Input
-                id="profile-name"
-                value={profileName}
-                onChange={(event) => setProfileName(event.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="profile-email">Email</Label>
-              <Input id="profile-email" value={user?.email ?? ""} disabled />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="profile-department">Department</Label>
-              <Input
-                id="profile-department"
-                value={profileDepartment}
-                onChange={(event) => setProfileDepartment(event.target.value)}
-              />
+        <DialogContent className="max-w-lg p-0 overflow-hidden rounded-2xl [&>button]:text-white [&>button]:hover:bg-white/20 [&>button]:rounded-full [&>button]:opacity-90">
+          {/* Header banner */}
+          <div className="bg-gradient-to-br from-primary to-blue-700 px-6 pt-10 pb-12 text-white">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center text-2xl font-bold">
+                {(user?.name || "?")[0].toUpperCase()}
+              </div>
+              <div>
+                <p className="text-lg font-bold leading-tight">{user?.name}</p>
+                <p className="text-sm text-blue-100 capitalize">{user?.role} · {user?.department || "No department"}</p>
+              </div>
             </div>
           </div>
-          <DialogFooter className="flex-col gap-2 sm:flex-row">
-            <Button
-              variant="secondary"
-              onClick={handleSaveProfile}
-              disabled={isProfileSaving}
-            >
-              {isProfileSaving ? "Saving..." : "Save profile"}
-            </Button>
-            <Button variant="ghost" onClick={() => setShowProfileModal(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-          <div className="mt-6 border-t border-slate-200 pt-4">
-            <p className="text-sm font-semibold text-slate-900">Change password</p>
-            <div className="grid gap-4 py-3">
-              <div className="grid gap-2">
-                <Label htmlFor="current-password">Current password</Label>
-                <Input
-                  id="current-password"
-                  type="password"
-                  value={currentPassword}
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                />
+
+          <div className="px-6 -mt-6 pb-6 space-y-5 max-h-[60vh] overflow-y-auto">
+            {/* Profile info card */}
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-5 space-y-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Profile information</p>
+              <div className="grid gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="profile-name" className="text-sm font-medium text-slate-700">Full name</Label>
+                  <Input
+                    id="profile-name"
+                    placeholder="Your full name"
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    className="rounded-xl border-slate-200 focus-visible:ring-primary"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="profile-dept" className="text-sm font-medium text-slate-700">Department</Label>
+                  <Input
+                    id="profile-dept"
+                    placeholder="Your department"
+                    value={profileDepartment}
+                    onChange={(e) => setProfileDepartment(e.target.value)}
+                    className="rounded-xl border-slate-200 focus-visible:ring-primary"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="profile-work-email" className="text-sm font-medium text-slate-700">
+                    Work email
+                    <span className="ml-2 text-xs text-slate-400 font-normal">(cannot be changed)</span>
+                  </Label>
+                  <Input
+                    id="profile-work-email"
+                    value={user?.email ?? ""}
+                    disabled
+                    className="rounded-xl bg-slate-50 text-slate-400"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="profile-personal-email" className="text-sm font-medium text-slate-700">
+                    Personal email
+                    <span className="ml-2 text-xs text-slate-400 font-normal">(used for password recovery)</span>
+                  </Label>
+                  <Input
+                    id="profile-personal-email"
+                    type="email"
+                    placeholder="your@gmail.com"
+                    value={profilePersonalEmail}
+                    onChange={(e) => setProfilePersonalEmail(e.target.value)}
+                    className="rounded-xl border-slate-200 focus-visible:ring-primary"
+                  />
+                </div>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="new-password">New password</Label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="confirm-password">Confirm new password</Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                />
-              </div>
-            </div>
-            <div className="flex justify-end">
               <Button
+                className="w-full rounded-xl"
+                onClick={handleSaveProfile}
+                disabled={isProfileSaving}
+              >
+                {isProfileSaving ? "Saving..." : "Save profile"}
+              </Button>
+            </div>
+
+            {/* Change password card */}
+            <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-5 space-y-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Change password</p>
+              <div className="grid gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="current-password" className="text-sm font-medium text-slate-700">Current password</Label>
+                  <Input
+                    id="current-password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="rounded-xl border-slate-200 focus-visible:ring-primary"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="new-password" className="text-sm font-medium text-slate-700">New password</Label>
+                  <Input
+                    id="new-password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="rounded-xl border-slate-200 focus-visible:ring-primary"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="confirm-password" className="text-sm font-medium text-slate-700">Confirm new password</Label>
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="rounded-xl border-slate-200 focus-visible:ring-primary"
+                  />
+                </div>
+              </div>
+              <Button
+                className="w-full rounded-xl"
                 onClick={handleChangePassword}
                 disabled={isPasswordChanging}
               >

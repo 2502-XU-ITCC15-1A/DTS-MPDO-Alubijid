@@ -49,14 +49,17 @@ app.get("/api/ping", (_req, res) => {
 });
 
 app.post("/api/user/update-profile", async (req, res) => {
-  const { id, name, department } = req.body;
+  const { id, name, department, personal_email } = req.body;
   if (!id || !name) {
     return res.status(400).json({ error: "Employee id and name are required." });
   }
 
+  const updates = { name, department };
+  if (personal_email !== undefined) updates.personal_email = personal_email || null;
+
   const { data, error } = await supabaseAdmin
     .from("employees")
-    .update({ name, department })
+    .update(updates)
     .eq("id", id)
     .select()
     .single();

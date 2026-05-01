@@ -7,6 +7,7 @@ export interface User {
   email: string;
   role: "admin" | "staff";
   department?: string;
+  personal_email?: string;
 }
 
 interface AuthContextType {
@@ -61,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: data.email,
       role: data.role,
       department: data.department,
+      personal_email: data.personal_email ?? undefined,
     });
     return true;
   }
