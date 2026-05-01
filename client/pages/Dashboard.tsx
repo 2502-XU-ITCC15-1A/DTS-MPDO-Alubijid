@@ -368,6 +368,12 @@ export default function Dashboard() {
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
   const notificationSeenRef = useRef(false);
+  const [isApprovingDoc, setIsApprovingDoc] = useState(false);
+  const [isRevisingDoc, setIsRevisingDoc] = useState(false);
+
+  const activeNotifications = notifications.filter((n) => !readNotificationIds.includes(n.id));
+  const unreadNotificationCount = activeNotifications.length;
+
   // Load employees and documents from Supabase on mount
   useEffect(() => {
     getEmployees().then(setEmployees).catch(console.error);
