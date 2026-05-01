@@ -104,9 +104,9 @@ const statusColors = {
     icon: AlertCircle,
   },
   "Sent for approval": {
-    bg: "bg-purple-50",
+    bg: "bg-purple-100",
     border: "border-purple-200",
-    text: "text-purple-700",
+    text: "text-purple-600",
     icon: HourglassIcon,
   },
   Completed: {
@@ -146,7 +146,7 @@ const statusOptions = [
     value: "Sent for approval",
     label: "Sent for Approval",
     icon: HourglassIcon,
-    text: "text-purple-700",
+    text: "text-purple-600",
   },
   {
     value: "Needs revision",
@@ -175,8 +175,40 @@ const getStatusDetails = (status: string) => {
   );
 };
 
+const getStatusColor = (status: string) =>
+  statusColors[status as keyof typeof statusColors] ?? statusColors.Pending;
+
+const parseStoredList = (key: string) => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    localStorage.removeItem(key);
+    return [];
+  }
+};
+
 const getStatusValue = (status: Document["status"]) =>
   status === "Released" ? "Approved" : status;
+
+const getStatusLabel = (status: Document["status"] | string | undefined) =>
+  status ? getStatusDetails(status).label : "Unknown";
+
+const formatStatusChange = (
+  oldStatus: Document["status"] | string | undefined,
+  newStatus: Document["status"] | string,
+) => `Changed from ${getStatusLabel(oldStatus)} to ${getStatusLabel(newStatus)}`;
+
+const formatStatusChangeTitle = (
+  oldStatus: Document["status"] | string | undefined,
+  newStatus: Document["status"] | string,
+) => `Status Changed: ${getStatusLabel(oldStatus)} → ${getStatusLabel(newStatus)}`;
+
+const getDocumentCreatedTime = (doc: Document) => {
+  const value = doc.createdAt || doc.submittedDate || doc.timestamp;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
 
 const documentTypeFilters: DocumentType[] = [
   "Received",
@@ -318,10 +350,10 @@ export default function Dashboard() {
     designation: designationOptionsByUnit.MPDC[0],
   });
   const [customDocumentTypes, setCustomDocumentTypes] = useState<string[]>(() =>
-    JSON.parse(localStorage.getItem("customDocumentTypes") || "[]"),
+    parseStoredList("customDocumentTypes"),
   );
   const [customSources, setCustomSources] = useState<string[]>(() =>
-    JSON.parse(localStorage.getItem("customSources") || "[]"),
+    parseStoredList("customSources"),
   );
   const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
   const [newSourceName, setNewSourceName] = useState("");
@@ -373,14 +405,8 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
 
     // Load custom document types and sources from localStorage
-    const savedCustomTypes = localStorage.getItem("customDocumentTypes");
-    const savedCustomSources = localStorage.getItem("customSources");
-    if (savedCustomTypes) {
-      setCustomDocumentTypes(JSON.parse(savedCustomTypes));
-    }
-    if (savedCustomSources) {
-      setCustomSources(JSON.parse(savedCustomSources));
-    }
+    setCustomDocumentTypes(parseStoredList("customDocumentTypes"));
+    setCustomSources(parseStoredList("customSources"));
   }, []);
 
   useEffect(() => {
@@ -728,12 +754,27 @@ export default function Dashboard() {
     window.location.href = "/login";
   };
 
+  const addStatusChangeLog = async (
+    documentId: string,
+    oldStatus: Document["status"] | string | undefined,
+    newStatus: Document["status"] | string,
+    actor: string,
+    note?: string,
+  ) => {
+    await addAuditLog(
+      documentId,
+      formatStatusChangeTitle(oldStatus, newStatus),
+      actor,
+      [formatStatusChange(oldStatus, newStatus), note]
+        .filter(Boolean)
+        .join(". "),
+    );
+  };
+
   const handleSaveEdits = async () => {
     if (!selectedDoc || isSaving) return;
     setIsSaving(true);
 
-    const newStatus =
-      (editForm.status as Document["status"]) || selectedDoc.status;
     const actor = user?.name || "Admin";
 
     const resolvedDeadline = editForm.deadline || selectedDoc.deadline;
@@ -760,9 +801,10 @@ export default function Dashboard() {
 
       // Log every field that actually changed
       if (effectiveStatus !== selectedDoc.status) {
-        await addAuditLog(
+        await addStatusChangeLog(
           selectedDoc.id,
-          `Status changed from ${selectedDoc.status} to ${effectiveStatus}`,
+          selectedDoc.status,
+          effectiveStatus,
           actor,
         );
       }
@@ -826,25 +868,24 @@ export default function Dashboard() {
     try {
       const doc = documents.find((d) => d.id === docId);
       const oldStatus = doc?.status || "";
+      if (oldStatus === value) return;
+
       await updateDocument(docId, { status: value });
-      await addAuditLog(
-        docId,
-        "Status Updated",
-        user?.name || "Admin",
-        `"${oldStatus}" → "${value}"`,
-      );
-      setDocuments((prev) =>
-        prev.map((doc) =>
-          doc.id === docId
-            ? { ...doc, status: value, updatedAt: new Date().toISOString() }
-            : doc,
-        ),
-      );
+      await addStatusChangeLog(docId, oldStatus, value, user?.name || "Staff");
+
+      const updated = await getDocuments();
+      setDocuments(updated);
       if (selectedDoc?.id === docId) {
-        setSelectedDoc({ ...selectedDoc, status: value });
+        const refreshed = updated.find((d) => d.id === docId);
+        if (refreshed) {
+          setSelectedDoc(refreshed);
+          setEditForm((prev) => ({ ...prev, status: refreshed.status }));
+        }
       }
+      toast.success(`Status changed to ${value}.`);
     } catch (err) {
       console.error("Failed to update status:", err);
+      toast.error("Failed to update status.");
     }
   };
 
@@ -912,38 +953,40 @@ export default function Dashboard() {
   const avgResponseTime = "3.2 days";
 
   // Filter by search (DTN or document name), document type, assignment, and deadline
-  const filteredDocuments = visibleDocuments.filter((doc) => {
-    const matchesSearch =
-      doc.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesDocType =
-      selectedFilter === "all" || doc.documentType === selectedFilter;
-    const matchesAssignment =
-      filterAssignedTo === "all" || doc.assignedTo === filterAssignedTo;
+  const filteredDocuments = visibleDocuments
+    .filter((doc) => {
+      const matchesSearch =
+        doc.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        doc.title.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesDocType =
+        selectedFilter === "all" || doc.documentType === selectedFilter;
+      const matchesAssignment =
+        filterAssignedTo === "all" || doc.assignedTo === filterAssignedTo;
 
-    let matchesDeadline = true;
-    if (filterDeadline !== "all") {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const docDeadline = new Date(doc.deadline);
-      docDeadline.setHours(0, 0, 0, 0);
-      const daysUntilDeadline = Math.ceil(
-        (docDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+      let matchesDeadline = true;
+      if (filterDeadline !== "all") {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const docDeadline = new Date(doc.deadline);
+        docDeadline.setHours(0, 0, 0, 0);
+        const daysUntilDeadline = Math.ceil(
+          (docDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+        );
+
+        if (filterDeadline === "overdue") matchesDeadline = daysUntilDeadline < 0;
+        else if (filterDeadline === "today")
+          matchesDeadline = daysUntilDeadline === 0;
+        else if (filterDeadline === "this-week")
+          matchesDeadline = daysUntilDeadline >= 0 && daysUntilDeadline <= 7;
+        else if (filterDeadline === "upcoming")
+          matchesDeadline = daysUntilDeadline > 7;
+      }
+
+      return (
+        matchesSearch && matchesDocType && matchesAssignment && matchesDeadline
       );
-
-      if (filterDeadline === "overdue") matchesDeadline = daysUntilDeadline < 0;
-      else if (filterDeadline === "today")
-        matchesDeadline = daysUntilDeadline === 0;
-      else if (filterDeadline === "this-week")
-        matchesDeadline = daysUntilDeadline >= 0 && daysUntilDeadline <= 7;
-      else if (filterDeadline === "upcoming")
-        matchesDeadline = daysUntilDeadline > 7;
-    }
-
-    return (
-      matchesSearch && matchesDocType && matchesAssignment && matchesDeadline
-    );
-  });
+    })
+    .sort((a, b) => getDocumentCreatedTime(b) - getDocumentCreatedTime(a));
 
   const activeNotifications = notifications.filter(
     (note) => !readNotificationIds.includes(note.id),
@@ -1500,8 +1543,7 @@ export default function Dashboard() {
               </div>
             ) : (
               filteredDocuments.map((doc) => {
-                const statusColor =
-                  statusColors[doc.status as keyof typeof statusColors];
+                const statusColor = getStatusColor(doc.status);
                 const StatusIcon = statusColor.icon;
                 const assignedEmployee = employees.find(
                   (e) => e.email === doc.assignedTo,
@@ -1581,7 +1623,7 @@ export default function Dashboard() {
                         >
                           <SelectTrigger
                             onClick={(e) => e.stopPropagation()}
-                            className={`rounded-full border ${statusColor.border} bg-white text-left px-3 py-1.5 h-9 inline-flex items-center gap-2 w-fit min-w-[10rem]`}
+                            className={`rounded-full border ${statusColor.border} ${statusColor.bg} text-left px-3 py-1.5 h-9 inline-flex items-center gap-2 w-fit min-w-[10rem]`}
                           >
                             <StatusIcon
                               className={`w-4 h-4 ${statusColor.text}`}
@@ -1765,67 +1807,58 @@ export default function Dashboard() {
                       )}
 
                       {/* Approve button - only for documents sent for approval */}
-                      {selectedDoc.status === "Sent for approval" &&
-                        docViewMode === "view" && (
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              setIsApprovingDoc(true);
-                              try {
-                                await approveDocument(
-                                  selectedDoc.id,
-                                  user?.name || "Admin",
-                                );
-                                const updated = await getDocuments();
-                                setDocuments(updated);
-                                const refreshed = updated.find(
-                                  (d) => d.id === selectedDoc.id,
-                                );
-                                if (refreshed) setSelectedDoc(refreshed);
-                                toast.success(
-                                  "Document approved successfully.",
-                                );
-                              } catch (err: any) {
-                                console.error(
-                                  "Failed to approve document:",
-                                  err,
-                                );
-                                toast.error(
-                                  err.message || "Failed to approve document.",
-                                );
-                              } finally {
-                                setIsApprovingDoc(false);
-                              }
-                            }}
-                            disabled={isApprovingDoc}
-                            className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-100 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
-                            title={isApprovingDoc ? "Approving..." : "Approve"}
-                          >
-                            {isApprovingDoc ? (
-                              <svg
-                                className="w-5 h-5 animate-spin"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                              >
-                                <circle
-                                  className="opacity-25"
-                                  cx="12"
-                                  cy="12"
-                                  r="10"
-                                  stroke="currentColor"
-                                  strokeWidth="4"
-                                />
-                                <path
-                                  className="opacity-75"
-                                  fill="currentColor"
-                                  d="M4 12a8 8 0 018-8v8z"
-                                />
-                              </svg>
-                            ) : (
-                              <CheckCircle className="w-5 h-5" />
-                            )}
-                          </button>
-                        )}
+                      {selectedDoc.status === "Sent for approval" && docViewMode === "view" && (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setIsApprovingDoc(true);
+                            try {
+                              await approveDocument(
+                                selectedDoc.id,
+                                user?.name || "Admin",
+                                selectedDoc.status,
+                              );
+                              const updated = await getDocuments();
+                              setDocuments(updated);
+                              const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                              if (refreshed) setSelectedDoc(refreshed);
+                              toast.success("Document approved successfully.");
+                            } catch (err: any) {
+                              console.error("Failed to approve document:", err);
+                              toast.error(err.message || "Failed to approve document.");
+                            } finally {
+                              setIsApprovingDoc(false);
+                            }
+                          }}
+                          disabled={isApprovingDoc}
+                          className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-100 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={isApprovingDoc ? "Approving..." : "Approve"}
+                        >
+                          {isApprovingDoc ? (
+                            <svg
+                              className="w-5 h-5 animate-spin"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              />
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8v8z"
+                              />
+                            </svg>
+                          ) : (
+                            <CheckCircle className="w-5 h-5" />
+                          )}
+                        </button>
+                      )}
 
                       {/* Revise button - only for documents sent for approval */}
                       {selectedDoc.status === "Sent for approval" &&
@@ -2108,15 +2141,20 @@ export default function Dashboard() {
                 <p className="text-xs text-gray-500 uppercase font-semibold mb-2">
                   Status
                 </p>
-                {docViewMode === "edit" ? (
+                {docViewMode === "edit" || user?.role === "staff" ? (
                   <Select
                     value={editForm.status || ""}
                     onValueChange={(value) => {
+                      const nextStatus = value as Document["status"];
                       setEditForm({
                         ...editForm,
-                        status: value as Document["status"],
+                        status: nextStatus,
                       });
-                      if (value === "Approved") {
+                      if (user?.role === "staff") {
+                        handleDocStatusChange(selectedDoc.id, nextStatus);
+                        return;
+                      }
+                      if (nextStatus === "Approved") {
                         setShowApprovalWorkflow(true);
                       }
                     }}
@@ -2434,6 +2472,11 @@ export default function Dashboard() {
                         <p className="text-sm text-gray-500">
                           {entry.date} • By {entry.by}
                         </p>
+                        {entry.details && (
+                          <p className="text-sm text-gray-700 mt-1">
+                            {entry.details}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -2451,6 +2494,7 @@ export default function Dashboard() {
                           await sendDocumentForApproval(
                             selectedDoc.id,
                             user?.name || "Staff",
+                            selectedDoc.status,
                           );
                           const updated = await getDocuments();
                           setDocuments(updated);
@@ -2797,9 +2841,10 @@ export default function Dashboard() {
                       await updateDocument(selectedDoc.id, {
                         status: "Approved",
                       });
-                      await addAuditLog(
+                      await addStatusChangeLog(
                         selectedDoc.id,
-                        "Document Approved",
+                        selectedDoc.status,
+                        "Approved",
                         user?.name || "Admin",
                         approvalRemarks || "Approved by admin",
                       );
@@ -2856,9 +2901,10 @@ export default function Dashboard() {
                     await updateDocument(selectedDoc.id, {
                       status: "Approved",
                     });
-                    await addAuditLog(
+                    await addStatusChangeLog(
                       selectedDoc.id,
-                      "Marked as Done",
+                      selectedDoc.status,
+                      "Approved",
                       user?.name || "Staff",
                       `Returned to ${selectedDoc.source}`,
                     );
@@ -3168,6 +3214,7 @@ export default function Dashboard() {
                         selectedDoc.id,
                         revisionComments,
                         user?.name || "Admin",
+                        selectedDoc.status,
                       );
                       const updated = await getDocuments();
                       setDocuments(updated);
