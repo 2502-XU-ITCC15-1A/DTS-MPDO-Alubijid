@@ -268,6 +268,55 @@ app.delete("/api/delete-folder/:documentId", async (req, res) => {
   }
 });
 
+// ── Archive a completed document: flag in Supabase + move Drive folder ────────
+app.post("/api/archive-document", async (req, res) => {
+  try {
+    const { documentId, archivedDate } = req.body;
+    if (!documentId) return res.status(400).json({ error: "documentId required" });
+
+    // 1. Mark archived in Supabase
+    const { error: dbErr } = await supabaseAdmin
+      .from("documents")
+      .update({ archived: true, updated_at: new Date().toISOString() })
+      .eq("id", documentId);
+    if (dbErr) return res.status(500).json({ error: dbErr.message });
+
+    // 2. Move Drive folder: Root → Completed → [Month] → [DocId]
+    try {
+      const date = archivedDate ? new Date(archivedDate) : new Date();
+      const rootId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+      const completedFolderId = await getOrCreateFolderIn("Completed", rootId);
+      const monthFolderId = await getOrCreateFolderIn(getMonthFolderName(date), completedFolderId);
+
+      // Find the document's existing folder anywhere in Drive
+      const search = await drive.files.list({
+        q: `name='${documentId}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+        fields: "files(id, parents)",
+      });
+
+      if (search.data.files && search.data.files.length > 0) {
+        const docFolder = search.data.files[0];
+        const oldParentId = docFolder.parents ? docFolder.parents[0] : null;
+
+        await drive.files.update({
+          fileId: docFolder.id,
+          addParents: monthFolderId,
+          removeParents: oldParentId || undefined,
+          fields: "id, parents",
+        });
+      }
+    } catch (driveErr) {
+      // Drive move is best-effort; don't fail the whole archive if Drive fails
+      console.error("Drive move error (non-fatal):", driveErr.message);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Archive error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Check if email is registered by admin ─────────────────────────────────────
 app.post("/api/check-email", async (req, res) => {
   const { email } = req.body;

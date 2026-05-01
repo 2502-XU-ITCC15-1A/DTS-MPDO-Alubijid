@@ -39,6 +39,7 @@ import {
   sendDocumentForApproval,
   approveDocument,
   reviseDocument,
+  archiveDocument,
   updateEmployeeProfile,
   changeUserPassword,
   locations,
@@ -65,6 +66,7 @@ import {
   X,
   Camera,
   User,
+  Archive,
 } from "lucide-react";
 
 const statusColors = {
@@ -234,7 +236,7 @@ export default function Dashboard() {
   const { user, logout, refreshUserProfile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeTab, setActiveTab] = useState<"all" | "incoming" | "outgoing">(
+  const [activeTab, setActiveTab] = useState<"all" | "incoming" | "outgoing" | "archived">(
     "all",
   );
   const [searchQuery, setSearchQuery] = useState("");
@@ -259,6 +261,9 @@ export default function Dashboard() {
   >([]);
   const [routingRemarks, setRoutingRemarks] = useState("");
   const [docViewMode, setDocViewMode] = useState<"view" | "edit">("view");
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [isSavingTitle, setIsSavingTitle] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [showEmployeeDeleteConfirm, setShowEmployeeDeleteConfirm] =
@@ -285,6 +290,7 @@ export default function Dashboard() {
   const [isApproving, setIsApproving] = useState(false);
   const [isMarkingDone, setIsMarkingDone] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
 
   const exportQrCode = () => {
@@ -379,8 +385,6 @@ export default function Dashboard() {
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
   const notificationSeenRef = useRef(false);
-  const [isApprovingDoc, setIsApprovingDoc] = useState(false);
-  const [isRevisingDoc, setIsRevisingDoc] = useState(false);
 
   const activeNotifications = notifications.filter(
     (n) => !readNotificationIds.includes(n.id),
@@ -662,6 +666,8 @@ export default function Dashboard() {
         destination: selectedDoc.destination || "",
         documentType: selectedDoc.type || "",
       });
+      setEditingTitle(false);
+      setTitleDraft("");
     }
   }, [selectedDoc?.id]);
 
@@ -906,6 +912,34 @@ export default function Dashboard() {
     }
   };
 
+  const handleSaveTitle = async () => {
+    if (!selectedDoc || isSavingTitle) return;
+    const trimmed = titleDraft.trim();
+    if (!trimmed) { toast.error("Document name cannot be empty."); return; }
+    if (trimmed === selectedDoc.title) { setEditingTitle(false); return; }
+    setIsSavingTitle(true);
+    try {
+      await updateDocument(selectedDoc.id, { title: trimmed });
+      await addAuditLog(
+        selectedDoc.id,
+        "Title Updated",
+        user?.name || "Admin",
+        `"${selectedDoc.title}" → "${trimmed}"`,
+      );
+      const updated = await getDocuments();
+      setDocuments(updated);
+      const refreshed = updated.find((d) => d.id === selectedDoc.id);
+      if (refreshed) setSelectedDoc(refreshed);
+      setEditingTitle(false);
+      toast.success("Document name updated.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update document name.");
+    } finally {
+      setIsSavingTitle(false);
+    }
+  };
+
   const handleDocStatusChange = async (
     docId: string,
     value: Document["status"],
@@ -967,10 +1001,15 @@ export default function Dashboard() {
     }
 
     // Filter by tab
-    if (activeTab === "incoming") {
-      docs = docs.filter((d) => !d.destination);
-    } else if (activeTab === "outgoing") {
-      docs = docs.filter((d) => d.destination);
+    if (activeTab === "archived") {
+      docs = docs.filter((d) => d.archived === true);
+    } else {
+      docs = docs.filter((d) => !d.archived);
+      if (activeTab === "incoming") {
+        docs = docs.filter((d) => !d.destination);
+      } else if (activeTab === "outgoing") {
+        docs = docs.filter((d) => d.destination);
+      }
     }
 
     return docs;
@@ -1100,7 +1139,8 @@ export default function Dashboard() {
     isApproving ||
     isMarkingDone ||
     isDeleting ||
-    isUploading;
+    isUploading ||
+    isArchiving;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1559,6 +1599,17 @@ export default function Dashboard() {
                 >
                   Outgoing Documents
                 </button>
+                <button
+                  onClick={() => setActiveTab("archived")}
+                  className={`pb-2 font-medium border-b-2 transition flex items-center gap-1.5 ${
+                    activeTab === "archived"
+                      ? "border-slate-500 text-slate-600"
+                      : "border-transparent text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  <Archive className="w-4 h-4" />
+                  Archived
+                </button>
               </div>
               {/* Upload button - admin only */}
               {user?.role === "admin" && (
@@ -1671,6 +1722,12 @@ export default function Dashboard() {
                           <span className="text-xs font-mono bg-green-100 px-2 py-1 rounded text-green-700 whitespace-nowrap font-semibold">
                             {doc.id}
                           </span>
+                          {doc.archived && (
+                            <span className="inline-flex items-center gap-1 text-xs bg-slate-100 border border-slate-300 px-2 py-1 rounded text-slate-500 whitespace-nowrap font-semibold">
+                              <Archive className="w-3 h-3" />
+                              Archived
+                            </span>
+                          )}
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-sm text-gray-600">
                           <div>
@@ -1829,10 +1886,41 @@ export default function Dashboard() {
             {/* Modal Header */}
             <div className="sticky top-0 bg-gradient-to-r from-primary to-secondary text-white p-6">
               <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-2xl font-bold">{selectedDoc.title}</h3>
+                <div className="flex-1 min-w-0 mr-4">
+                  {editingTitle ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        autoFocus
+                        value={titleDraft}
+                        onChange={(e) => setTitleDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveTitle();
+                          if (e.key === "Escape") setEditingTitle(false);
+                        }}
+                        className="text-xl font-bold bg-white/20 border border-white/40 rounded-lg px-3 py-1 text-white placeholder-white/50 w-full focus:outline-none focus:border-white"
+                        placeholder="Document name..."
+                      />
+                      <button
+                        onClick={handleSaveTitle}
+                        disabled={isSavingTitle}
+                        className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-semibold text-white transition disabled:opacity-50 whitespace-nowrap"
+                      >
+                        {isSavingTitle ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        onClick={() => setEditingTitle(false)}
+                        className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs text-white/80 transition whitespace-nowrap"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-2xl font-bold truncate">{selectedDoc.title}</h3>
+                    </div>
+                  )}
                   <p className="text-white/80 text-sm mt-1">{selectedDoc.id}</p>
-                  {user?.role === "admin" && (
+                  {user?.role === "admin" && !editingTitle && (
                     <p className="text-white/70 text-xs mt-2">
                       Mode:{" "}
                       <span className="font-semibold capitalize">
@@ -1848,12 +1936,17 @@ export default function Dashboard() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setDocViewMode(
-                            docViewMode === "view" ? "edit" : "view",
-                          );
+                          if (docViewMode === "view") {
+                            setDocViewMode("edit");
+                            setTitleDraft(selectedDoc.title);
+                            setEditingTitle(true);
+                          } else {
+                            setDocViewMode("view");
+                            setEditingTitle(false);
+                          }
                         }}
                         className="p-2 bg-white/20 hover:bg-white/30 text-white rounded transition"
-                        title={docViewMode === "view" ? "Edit" : "View"}
+                        title={docViewMode === "view" ? "Edit document" : "Stop editing"}
                       >
                         <Edit className="w-5 h-5" />
                       </button>
@@ -2645,7 +2738,6 @@ export default function Dashboard() {
                     </div>
                   ) : (
                     <div className="bg-blue-50 p-4 rounded-lg space-y-4">
-                      {/* Actions - View Mode */}
                       <div>
                         <p className="text-sm font-semibold text-gray-900 mb-2">
                           Actions Required:
@@ -2656,25 +2748,25 @@ export default function Dashboard() {
                               key={idx}
                               className="flex items-center gap-2 text-sm text-gray-700"
                             >
-                              <div className="w-2 h-2 bg-primary rounded-full"></div>
+                              <div className="w-2 h-2 bg-primary rounded-full" />
                               {action}
                             </div>
                           ))}
                         </div>
                       </div>
 
-                    {/* Remarks */}
-                    {selectedDoc.routingSlip.remarks && (
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900 mb-2">
-                          Remarks:
-                        </p>
-                        <p className="text-sm text-gray-700 italic">
-                          {selectedDoc.routingSlip.remarks}
-                        </p>
-                      </div>
-                    )}
-                  </div>
+                      {selectedDoc.routingSlip.remarks && (
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900 mb-2">
+                            Remarks:
+                          </p>
+                          <p className="text-sm text-gray-700 italic">
+                            {selectedDoc.routingSlip.remarks}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2747,6 +2839,42 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
+
+              {/* Admin-only Archive Button - for Completed documents */}
+              {user?.role === "admin" && selectedDoc.status === "Completed" && !selectedDoc.archived && (
+                <div className="border-t pt-6">
+                  <Button
+                    onClick={async () => {
+                      if (!selectedDoc || isArchiving) return;
+                      setIsArchiving(true);
+                      try {
+                        await archiveDocument(selectedDoc.id, new Date());
+                        await addAuditLog(
+                          selectedDoc.id,
+                          "Document Archived",
+                          user?.name || "Admin",
+                          "Document moved to archive. Files organized in Completed folder on Google Drive.",
+                        );
+                        const updated = await getDocuments();
+                        setDocuments(updated);
+                        setSelectedDoc(null);
+                        setActiveTab("archived");
+                        toast.success("Document archived and files moved to Completed folder.");
+                      } catch (err) {
+                        console.error(err);
+                        toast.error("Failed to archive document.");
+                      } finally {
+                        setIsArchiving(false);
+                      }
+                    }}
+                    disabled={isArchiving}
+                    className="w-full bg-slate-500 hover:bg-slate-600 text-white flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
+                    <Archive className="w-4 h-4" />
+                    {isArchiving ? "Archiving..." : "Archive Document"}
+                  </Button>
+                </div>
+              )}
 
               {/* Staff-only Done Button */}
               {user?.role === "staff" && (

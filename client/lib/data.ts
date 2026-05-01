@@ -122,10 +122,8 @@ export async function getDocuments(): Promise<Document[]> {
         source: doc.source,
         destination: doc.destination,
         routingSlip: doc.routing_slip,
-        revisionComments:
-        doc.revision_comments ??
-        doc.routing_slip?.revision_comments ??
-        "",
+        revisionComments: doc.revision_comments ?? "",
+        archived: doc.archived ?? false,
         createdAt: doc.created_at,
         updatedAt: doc.updated_at,
         files: (files ?? []).map((f) => ({
@@ -191,23 +189,27 @@ export async function createDocument(
 export async function updateDocument(
   id: string,
   fields: Partial<{
+    title: string;
     status: string;
     assignedTo: string;
     source: string;
     destination: string;
     deadline: string;
     documentType: string;
+    archived: boolean;
     routingActions?: string[];
   }>,
 ) {
   const mapped: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
+  if (fields.title) mapped.title = fields.title;
   if (fields.status) mapped.status = fields.status;
   if (fields.assignedTo) mapped.assigned_to = fields.assignedTo;
   if (fields.source) mapped.source = fields.source;
   if (fields.destination !== undefined) mapped.destination = fields.destination;
   if (fields.deadline) mapped.deadline = fields.deadline;
+  if (fields.archived !== undefined) mapped.archived = fields.archived;
   if (fields.routingActions) {
     // Store routing actions as JSON array in the database
     mapped.routing_slip = JSON.stringify({
@@ -238,6 +240,19 @@ export async function deleteDocument(id: string) {
 
   const { error } = await supabase.from("documents").delete().eq("id", id);
   if (error) throw error;
+}
+
+export async function archiveDocument(documentId: string, archivedDate?: Date) {
+  const res = await fetch("/api/archive-document", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ documentId, archivedDate: (archivedDate ?? new Date()).toISOString() }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error || "Failed to archive document.");
+  }
+  return res.json();
 }
 
 export async function deleteDocumentFile(fileId: string) {

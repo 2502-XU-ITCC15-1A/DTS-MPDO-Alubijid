@@ -75,6 +75,7 @@ export interface Document {
   history: AuditLogEntry[];
   routingSlip?: RoutingSlip; // Routing slip (digital routing sheet)
   revisionComments?: string; // Comments from admin when revising document
+  archived?: boolean; // True when document has been moved to archive
   createdAt: string;
   updatedAt: string;
 }

@@ -194,4 +194,48 @@ app.delete("/api/delete-folder/:documentId", async (req, res) => {
   }
 });
 
+// Archive a completed document: flag in Supabase + move Drive folder
+app.post("/api/archive-document", async (req, res) => {
+  try {
+    const { documentId, archivedDate } = req.body;
+    if (!documentId) return res.status(400).json({ error: "documentId required" });
+
+    const { error: dbErr } = await supabaseAdmin
+      .from("documents")
+      .update({ archived: true, updated_at: new Date().toISOString() })
+      .eq("id", documentId);
+    if (dbErr) return res.status(500).json({ error: dbErr.message });
+
+    try {
+      const date = archivedDate ? new Date(archivedDate) : new Date();
+      const rootId = process.env.GOOGLE_DRIVE_FOLDER_ID!;
+      const completedFolderId = await getOrCreateFolderIn("Completed", rootId);
+      const monthFolderId = await getOrCreateFolderIn(getMonthFolderName(date), completedFolderId);
+
+      const search = await drive.files.list({
+        q: `name='${documentId}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+        fields: "files(id, parents)",
+      });
+
+      if (search.data.files && search.data.files.length > 0) {
+        const docFolder = search.data.files[0];
+        const oldParentId = docFolder.parents ? docFolder.parents[0] : undefined;
+
+        await drive.files.update({
+          fileId: docFolder.id!,
+          addParents: monthFolderId,
+          removeParents: oldParentId,
+          fields: "id, parents",
+        });
+      }
+    } catch (driveErr: any) {
+      console.error("Drive move error (non-fatal):", driveErr.message);
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export const handler = serverless(app);
