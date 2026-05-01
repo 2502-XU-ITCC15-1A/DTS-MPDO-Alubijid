@@ -238,4 +238,6 @@ app.post("/api/archive-document", async (req, res) => {
   }
 });
 
-export const handler = serverless(app);
+export const handler = serverless(app, {
+  binary: ["multipart/form-data", "application/octet-stream", "image/*", "application/pdf"],
+});
