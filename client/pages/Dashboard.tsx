@@ -186,8 +186,6 @@ const parseStoredList = (key: string) => {
 const getStatusValue = (status: Document["status"]) =>
   status === "Released" ? "Approved" : status;
 
-type StatusFilter = Document["status"] | "approved-completed" | "all";
-
 const documentTypeFilters: DocumentType[] = [
   "Received",
   "Assigned",
@@ -262,8 +260,6 @@ export default function Dashboard() {
   const [approvalRemarks, setApprovalRemarks] = useState("");
   const [filterAssignedTo, setFilterAssignedTo] = useState<string>("all");
   const [filterDeadline, setFilterDeadline] = useState<string>("all");
-  const [selectedStatusFilter, setSelectedStatusFilter] =
-    useState<StatusFilter>("all");
   const [openMenuDocId, setOpenMenuDocId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
@@ -918,74 +914,21 @@ export default function Dashboard() {
     pending: visibleDocuments.filter((d) => d.status === "Pending").length,
     processing: visibleDocuments.filter((d) => d.status === "Processing")
       .length,
-    overdue: visibleDocuments.filter((d) => d.status === "Overdue").length,
-    sentForApproval: visibleDocuments.filter(
-      (d) => d.status === "Sent for approval",
-    ).length,
-    needsRevision: visibleDocuments.filter((d) => d.status === "Needs revision")
-      .length,
-    approvedCompleted: visibleDocuments.filter(
+    completed: visibleDocuments.filter(
       (d) =>
         d.status === "Approved" ||
         d.status === "Released" ||
         d.status === "Completed",
     ).length,
+    overdue: visibleDocuments.filter((d) => d.status === "Overdue").length,
+    sentForApproval: visibleDocuments.filter(
+      (d) => d.status === "Sent for approval",
+    ).length,
   };
-
-  const statusCards = [
-    {
-      key: "Pending" as StatusFilter,
-      title: "Pending",
-      count: stats.pending,
-      icon: AlertCircle,
-      iconClass: "text-yellow-600",
-      bgClass: "bg-yellow-100",
-    },
-    {
-      key: "Processing" as StatusFilter,
-      title: "Processing",
-      count: stats.processing,
-      icon: HourglassIcon,
-      iconClass: "text-blue-600",
-      bgClass: "bg-blue-100",
-    },
-    {
-      key: "Overdue" as StatusFilter,
-      title: "Overdue",
-      count: stats.overdue,
-      icon: AlertCircle,
-      iconClass: "text-red-600",
-      bgClass: "bg-red-100",
-    },
-    {
-      key: "Sent for approval" as StatusFilter,
-      title: "Sent for Approval",
-      count: stats.sentForApproval,
-      icon: HourglassIcon,
-      iconClass: "text-purple-600",
-      bgClass: "bg-purple-100",
-    },
-    {
-      key: "Needs revision" as StatusFilter,
-      title: "Needs Revision",
-      count: stats.needsRevision,
-      icon: AlertCircle,
-      iconClass: "text-orange-600",
-      bgClass: "bg-orange-100",
-    },
-    {
-      key: "approved-completed" as StatusFilter,
-      title: "Approved/Completed",
-      count: stats.approvedCompleted,
-      icon: CheckCircle,
-      iconClass: "text-green-600",
-      bgClass: "bg-green-100",
-    },
-  ];
 
   const avgResponseTime = "3.2 days";
 
-  // Filter by search (DTN or document name), document type, assignment, deadline, and status
+  // Filter by search (DTN or document name), document type, assignment, and deadline
   const filteredDocuments = visibleDocuments.filter((doc) => {
     const matchesSearch =
       doc.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -994,12 +937,6 @@ export default function Dashboard() {
       selectedFilter === "all" || doc.documentType === selectedFilter;
     const matchesAssignment =
       filterAssignedTo === "all" || doc.assignedTo === filterAssignedTo;
-
-    const matchesStatus =
-      selectedStatusFilter === "all" ||
-      (selectedStatusFilter === "approved-completed"
-        ? ["Approved", "Released", "Completed"].includes(doc.status)
-        : doc.status === selectedStatusFilter);
 
     let matchesDeadline = true;
     if (filterDeadline !== "all") {
@@ -1021,11 +958,7 @@ export default function Dashboard() {
       }
 
     return (
-      matchesSearch &&
-      matchesDocType &&
-      matchesAssignment &&
-      matchesStatus &&
-      matchesDeadline
+      matchesSearch && matchesDocType && matchesAssignment && matchesDeadline
     );
   });
 
@@ -1375,45 +1308,77 @@ export default function Dashboard() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-          {statusCards.map((card) => {
-            const isActive = selectedStatusFilter === card.key;
-            const onClick = () =>
-              setSelectedStatusFilter((current) =>
-                current === card.key ? "all" : card.key,
-              );
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">Pending</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {stats.pending}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-yellow-600" />
+              </div>
+            </div>
+          </div>
 
-            const activeClasses = isActive
-              ? "border-primary ring-2 ring-primary/20"
-              : "border-gray-200";
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">Processing</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {stats.processing}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <HourglassIcon className="w-6 h-6 text-blue-600" />
+              </div>
+            </div>
+          </div>
 
-            return (
-              <button
-                key={card.key}
-                type="button"
-                onClick={onClick}
-                className={`bg-white rounded-xl p-6 shadow-sm border ${activeClasses} text-left transition hover:shadow-md`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-600 text-sm font-medium">
-                      {card.title}
-                    </p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">
-                      {card.count}
-                    </p>
-                  </div>
-                  <div
-                    className={`w-12 h-12 ${card.bgClass} rounded-lg flex items-center justify-center`}
-                  >
-                    {(() => {
-                      const Icon = card.icon;
-                      return <Icon className={`w-6 h-6 ${card.iconClass}`} />;
-                    })()}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">Completed</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {stats.completed}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <CheckCircle className="w-6 h-6 text-green-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">Overdue</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {stats.overdue}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-red-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">
+                  Sent for Approval
+                </p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {stats.sentForApproval}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                <HourglassIcon className="w-6 h-6 text-purple-600" />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Efficiency Metrics
