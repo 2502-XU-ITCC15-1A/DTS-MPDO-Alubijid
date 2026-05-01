@@ -1283,20 +1283,9 @@ export default function Dashboard() {
                               className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded"
                             >
                               <button
-                                onClick={async () => {
-                                  try {
-                                    await deleteEmployee(employee.id);
-                                    setEmployees((prev) =>
-                                      prev.filter(
-                                        (emp) => emp.id !== employee.id,
-                                      ),
-                                    );
-                                  } catch (err) {
-                                    console.error(
-                                      "Failed to remove employee:",
-                                      err,
-                                    );
-                                  }
+                                onClick={() => {
+                                  setEmployeeToDelete(employee);
+                                  setShowEmployeeDeleteConfirm(true);
                                 }}
                                 className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition flex-shrink-0"
                                 title="Remove employee"
