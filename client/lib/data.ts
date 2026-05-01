@@ -199,6 +199,7 @@ export async function updateDocument(
     destination: string;
     deadline: string;
     documentType: string;
+    routingActions?: string[];
   }>,
 ) {
   const mapped: Record<string, unknown> = {
@@ -210,7 +211,12 @@ export async function updateDocument(
   if (fields.source) mapped.source = fields.source;
   if (fields.destination !== undefined) mapped.destination = fields.destination;
   if (fields.deadline) mapped.deadline = fields.deadline;
-  if (fields.documentType) mapped.type = fields.documentType;
+  if (fields.routingActions) {
+    // Store routing actions as JSON array in the database
+    mapped.routing_slip = JSON.stringify({
+      actions: fields.routingActions,
+    });
+  }
 
   const { error } = await supabase
     .from("documents")
