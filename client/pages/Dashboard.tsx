@@ -755,6 +755,7 @@ export default function Dashboard() {
         source: editForm.source,
         destination: editForm.destination,
         deadline: resolvedDeadline,
+        documentType: editForm.documentType,
       });
 
       // Log every field that actually changed
@@ -1890,7 +1891,7 @@ export default function Dashboard() {
                         }
                       >
                         <option value="">Select Type</option>
-                        <option value="Communication-Letter">
+                        <option value="Communication Letter">
                           Communication Letter
                         </option>
                         <option value="Letter Request">Letter Request</option>
@@ -1901,8 +1902,8 @@ export default function Dashboard() {
                         <option value="Resolution">Resolution</option>
                         <option value="Ordinance">Ordinance</option>
                         <option value="Travel Order">Travel Order</option>
-                        <option value="Zoning, Certification, and Locational Clearance">
-                          Zoning, Certification, and Locational Clearance
+                        <option value="Zoning Certification and Locational Clearance">
+                          Zoning Certification and Locational Clearance
                         </option>
                         {/* {customDocumentTypes.map((type) => (
                           <option key={type} value={type}>

@@ -189,6 +189,7 @@ export async function updateDocument(
     source: string;
     destination: string;
     deadline: string;
+    documentType: string;
   }>,
 ) {
   const mapped: Record<string, unknown> = {
@@ -199,6 +200,7 @@ export async function updateDocument(
   if (fields.source) mapped.source = fields.source;
   if (fields.destination !== undefined) mapped.destination = fields.destination;
   if (fields.deadline) mapped.deadline = fields.deadline;
+  if (fields.documentType) mapped.type = fields.documentType;
 
   const { error } = await supabase
     .from("documents")
