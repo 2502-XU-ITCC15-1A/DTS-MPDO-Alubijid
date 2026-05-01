@@ -899,6 +899,28 @@ export default function Dashboard() {
     }
   };
 
+  const handleApproveSelectedDoc = async () => {
+    if (!selectedDoc || isApprovingDoc) return;
+    setIsApprovingDoc(true);
+    try {
+      await approveDocument(
+        selectedDoc.id,
+        user?.name || "Admin",
+        selectedDoc.status,
+      );
+      const updated = await getDocuments();
+      setDocuments(updated);
+      const refreshed = updated.find((d) => d.id === selectedDoc.id);
+      if (refreshed) setSelectedDoc(refreshed);
+      toast.success("Document approved successfully.");
+    } catch (err: any) {
+      console.error("Failed to approve document:", err);
+      toast.error(err.message || "Failed to approve document.");
+    } finally {
+      setIsApprovingDoc(false);
+    }
+  };
+
   const handleAddCustomDocumentType = () => {
     if (
       newDocumentTypeName.trim() &&
@@ -1856,85 +1878,6 @@ export default function Dashboard() {
                         </button>
                       )}
 
-                      {/* Approve button - only for documents sent for approval */}
-                      {selectedDoc.status === "Sent for approval" &&
-                        docViewMode === "view" && (
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              setIsApprovingDoc(true);
-                              try {
-                                await approveDocument(
-                                  selectedDoc.id,
-                                  user?.name || "Admin",
-                                  selectedDoc.status,
-                                );
-                                const updated = await getDocuments();
-                                setDocuments(updated);
-                                const refreshed = updated.find(
-                                  (d) => d.id === selectedDoc.id,
-                                );
-                                if (refreshed) setSelectedDoc(refreshed);
-                                toast.success(
-                                  "Document approved successfully.",
-                                );
-                              } catch (err: any) {
-                                console.error(
-                                  "Failed to approve document:",
-                                  err,
-                                );
-                                toast.error(
-                                  err.message || "Failed to approve document.",
-                                );
-                              } finally {
-                                setIsApprovingDoc(false);
-                              }
-                            }}
-                            disabled={isApprovingDoc}
-                            className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-100 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
-                            title={isApprovingDoc ? "Approving..." : "Approve"}
-                          >
-                            {isApprovingDoc ? (
-                              <svg
-                                className="w-5 h-5 animate-spin"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                              >
-                                <circle
-                                  className="opacity-25"
-                                  cx="12"
-                                  cy="12"
-                                  r="10"
-                                  stroke="currentColor"
-                                  strokeWidth="4"
-                                />
-                                <path
-                                  className="opacity-75"
-                                  fill="currentColor"
-                                  d="M4 12a8 8 0 018-8v8z"
-                                />
-                              </svg>
-                            ) : (
-                              <CheckCircle className="w-5 h-5" />
-                            )}
-                          </button>
-                        )}
-
-                      {/* Revise button - only for documents sent for approval */}
-                      {selectedDoc.status === "Sent for approval" &&
-                        docViewMode === "view" && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowRevisionModal(true);
-                            }}
-                            className="p-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-100 rounded transition"
-                            title="Revise"
-                          >
-                            <Edit className="w-5 h-5" />
-                          </button>
-                        )}
-
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -2201,86 +2144,139 @@ export default function Dashboard() {
                 <p className="text-xs text-gray-500 uppercase font-semibold mb-2">
                   Status
                 </p>
-                {docViewMode === "edit" || user?.role === "staff" ? (
-                  <Select
-                    value={editForm.status || ""}
-                    onValueChange={(value) => {
-                      const nextStatus = value as Document["status"];
-                      setEditForm({
-                        ...editForm,
-                        status: nextStatus,
-                      });
-                      if (user?.role === "staff") {
-                        handleDocStatusChange(selectedDoc.id, nextStatus);
-                        return;
-                      }
-                      if (nextStatus === "Approved") {
-                        setShowApprovalWorkflow(true);
-                      }
-                    }}
-                  >
-                    <SelectTrigger>
-                      {editForm.status ? (
-                        <div className="flex items-center gap-2">
-                          {(() => {
-                            const selectedStatus = getStatusDetails(
-                              editForm.status,
-                            );
-                            const SelectedIcon = selectedStatus.icon;
-                            return (
-                              <>
-                                <SelectedIcon
-                                  className={`w-4 h-4 ${selectedStatus.text}`}
-                                />
-                                <span
-                                  className={`text-sm font-medium ${selectedStatus.text}`}
-                                >
-                                  {selectedStatus.label}
-                                </span>
-                              </>
-                            );
-                          })()}
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-500">
-                          Select status
-                        </span>
-                      )}
-                    </SelectTrigger>
-                    <SelectContent>
-                      {statusOptions.map((option) => {
-                        const OptionIcon = option.icon;
-                        return (
-                          <SelectItem key={option.value} value={option.value}>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    {docViewMode === "edit" || user?.role === "staff" ? (
+                      <Select
+                        value={editForm.status || ""}
+                        onValueChange={(value) => {
+                          const nextStatus = value as Document["status"];
+                          setEditForm({
+                            ...editForm,
+                            status: nextStatus,
+                          });
+                          if (user?.role === "staff") {
+                            handleDocStatusChange(selectedDoc.id, nextStatus);
+                            return;
+                          }
+                          if (nextStatus === "Approved") {
+                            setShowApprovalWorkflow(true);
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          {editForm.status ? (
                             <div className="flex items-center gap-2">
-                              <OptionIcon
-                                className={`w-4 h-4 ${option.text}`}
-                              />
-                              <span>{option.label}</span>
+                              {(() => {
+                                const selectedStatus = getStatusDetails(
+                                  editForm.status,
+                                );
+                                const SelectedIcon = selectedStatus.icon;
+                                return (
+                                  <>
+                                    <SelectedIcon
+                                      className={`w-4 h-4 ${selectedStatus.text}`}
+                                    />
+                                    <span
+                                      className={`text-sm font-medium ${selectedStatus.text}`}
+                                    >
+                                      {selectedStatus.label}
+                                    </span>
+                                  </>
+                                );
+                              })()}
                             </div>
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg w-full">
-                    {(() => {
-                      const details = getStatusDetails(selectedDoc.status);
-                      const StatusIcon = details.icon;
-                      return (
-                        <>
-                          <StatusIcon className={`w-4 h-4 ${details.text}`} />
-                          <span
-                            className={`text-lg font-medium ${details.text}`}
-                          >
-                            {details.label}
-                          </span>
-                        </>
-                      );
-                    })()}
+                          ) : (
+                            <span className="text-sm text-gray-500">
+                              Select status
+                            </span>
+                          )}
+                        </SelectTrigger>
+                        <SelectContent>
+                          {statusOptions.map((option) => {
+                            const OptionIcon = option.icon;
+                            return (
+                              <SelectItem key={option.value} value={option.value}>
+                                <div className="flex items-center gap-2">
+                                  <OptionIcon
+                                    className={`w-4 h-4 ${option.text}`}
+                                  />
+                                  <span>{option.label}</span>
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg w-full">
+                        {(() => {
+                          const details = getStatusDetails(selectedDoc.status);
+                          const StatusIcon = details.icon;
+                          return (
+                            <>
+                              <StatusIcon className={`w-4 h-4 ${details.text}`} />
+                              <span
+                                className={`text-lg font-medium ${details.text}`}
+                              >
+                                {details.label}
+                              </span>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
-                )}
+                  {user?.role === "admin" &&
+                    selectedDoc.status === "Sent for approval" &&
+                    (
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleApproveSelectedDoc();
+                          }}
+                          disabled={isApprovingDoc}
+                          className="p-2 bg-green-100 hover:bg-green-200 text-green-700 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={isApprovingDoc ? "Approving..." : "Approve"}
+                        >
+                          {isApprovingDoc ? (
+                            <svg
+                              className="w-5 h-5 animate-spin"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              />
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8v8z"
+                              />
+                            </svg>
+                          ) : (
+                            <CheckCircle className="w-5 h-5" />
+                          )}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowRevisionModal(true);
+                          }}
+                          className="p-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-700 rounded transition"
+                          title="Revise"
+                        >
+                          <Edit className="w-5 h-5" />
+                        </button>
+                      </div>
+                    )}
+                </div>
               </div>
 
               {/* File Upload Section */}
