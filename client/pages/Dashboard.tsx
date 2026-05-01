@@ -65,6 +65,9 @@ import {
   X,
   Camera,
   User,
+  Lock,
+  Mail,
+  Building2,
 } from "lucide-react";
 
 const statusColors = {
@@ -1253,10 +1256,11 @@ export default function Dashboard() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="mt-2"
+                  className="mt-2 flex items-center gap-1.5 text-primary border-primary/40 hover:bg-primary/5 hover:border-primary font-medium rounded-lg transition-all duration-200 shadow-sm"
                   onClick={() => setShowProfileModal(true)}
                 >
-                  Edit profile
+                  <Edit className="w-3 h-3" />
+                  Edit Profile
                 </Button>
               </div>
 
@@ -1369,86 +1373,123 @@ export default function Dashboard() {
       </header>
 
       <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Update profile</DialogTitle>
-            <DialogDescription>
-              Change your name, department, and password securely.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="profile-name">Name</Label>
-              <Input
-                id="profile-name"
-                value={profileName}
-                onChange={(event) => setProfileName(event.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="profile-email">Email</Label>
-              <Input id="profile-email" value={user?.email ?? ""} disabled />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="profile-department">Department</Label>
-              <Input
-                id="profile-department"
-                value={profileDepartment}
-                onChange={(event) => setProfileDepartment(event.target.value)}
-              />
+        <DialogContent className="max-w-md rounded-2xl p-0 overflow-hidden shadow-xl border-0">
+
+          {/* Gradient Header */}
+          <div className="bg-gradient-to-br from-primary to-primary/80 px-6 pt-6 pb-8 relative">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center ring-2 ring-white/30">
+                <User className="w-7 h-7 text-white" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-semibold text-white">Edit Profile</DialogTitle>
+                <DialogDescription className="text-white/70 text-sm mt-0.5">
+                  {user?.name || user?.email?.split("@")[0]} · <span className="capitalize">{user?.role}</span>
+                </DialogDescription>
+              </div>
             </div>
           </div>
-          <DialogFooter className="flex-col gap-2 sm:flex-row">
-            <Button
-              variant="secondary"
-              onClick={handleSaveProfile}
-              disabled={isProfileSaving}
-            >
-              {isProfileSaving ? "Saving..." : "Save profile"}
-            </Button>
-            <Button variant="ghost" onClick={() => setShowProfileModal(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-          <div className="mt-6 border-t border-slate-200 pt-4">
-            <p className="text-sm font-semibold text-slate-900">
-              Change password
-            </p>
-            <div className="grid gap-4 py-3">
-              <div className="grid gap-2">
-                <Label htmlFor="current-password">Current password</Label>
+
+          <div className="px-6 -mt-4 pb-6 space-y-4">
+
+            {/* Profile Info Card */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-3">
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Profile Info</p>
+              <div className="grid gap-1.5">
+                <Label htmlFor="profile-name" className="text-xs font-medium text-gray-600 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5" /> Full Name
+                </Label>
+                <Input
+                  id="profile-name"
+                  value={profileName}
+                  onChange={(event) => setProfileName(event.target.value)}
+                  className="h-9 rounded-lg text-sm border-gray-200 focus:border-primary"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="profile-email" className="text-xs font-medium text-gray-600 flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5" /> Email
+                </Label>
+                <Input
+                  id="profile-email"
+                  value={user?.email ?? ""}
+                  disabled
+                  className="h-9 rounded-lg text-sm bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="profile-department" className="text-xs font-medium text-gray-600 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5" /> Department
+                </Label>
+                <Input
+                  id="profile-department"
+                  value={profileDepartment}
+                  onChange={(event) => setProfileDepartment(event.target.value)}
+                  className="h-9 rounded-lg text-sm border-gray-200 focus:border-primary"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button
+                  onClick={handleSaveProfile}
+                  disabled={isProfileSaving}
+                  className="flex-1 h-9 rounded-lg text-sm font-medium"
+                >
+                  {isProfileSaving ? "Saving..." : "Save changes"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowProfileModal(false)}
+                  className="h-9 rounded-lg text-sm px-5 border-gray-200 text-gray-600"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+
+            {/* Change Password Card */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-3">
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                <Lock className="w-3 h-3" /> Change Password
+              </p>
+              <div className="grid gap-1.5">
+                <Label htmlFor="current-password" className="text-xs font-medium text-gray-600">Current password</Label>
                 <Input
                   id="current-password"
                   type="password"
                   value={currentPassword}
                   onChange={(event) => setCurrentPassword(event.target.value)}
+                  className="h-9 rounded-lg text-sm border-gray-200"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="new-password">New password</Label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="new-password" className="text-xs font-medium text-gray-600">New password</Label>
+                  <Input
+                    id="new-password"
+                    type="password"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    className="h-9 rounded-lg text-sm border-gray-200"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="confirm-password" className="text-xs font-medium text-gray-600">Confirm password</Label>
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    className="h-9 rounded-lg text-sm border-gray-200"
+                  />
+                </div>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="confirm-password">Confirm new password</Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                />
-              </div>
-            </div>
-            <div className="flex justify-end">
               <Button
-                className="w-full rounded-xl"
                 onClick={handleChangePassword}
                 disabled={isPasswordChanging}
+                variant="outline"
+                className="w-full h-9 rounded-lg text-sm font-medium border-primary/30 text-primary hover:bg-primary/5"
               >
+                <Lock className="w-3.5 h-3.5 mr-2" />
                 {isPasswordChanging ? "Updating..." : "Update password"}
               </Button>
             </div>
