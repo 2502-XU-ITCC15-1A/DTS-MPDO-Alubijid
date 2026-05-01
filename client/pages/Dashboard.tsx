@@ -317,7 +317,6 @@ export default function Dashboard() {
     };
     img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgData)))}`;
   };
-
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<string | null>(null);
@@ -374,6 +373,7 @@ export default function Dashboard() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [profileDepartment, setProfileDepartment] = useState("");
+  const [profilePersonalEmail, setProfilePersonalEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -455,12 +455,17 @@ export default function Dashboard() {
     if (!user) return;
     setProfileName(user.name || "");
     setProfileDepartment(user.department || "");
+    setProfilePersonalEmail(user.personal_email || "");
   }, [user]);
 
   const handleSaveProfile = async () => {
     if (!user) return;
     if (!profileName.trim()) {
       toast.error("Name cannot be empty.");
+      return;
+    }
+    if (profilePersonalEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profilePersonalEmail)) {
+      toast.error("Please enter a valid personal email address.");
       return;
     }
 
@@ -1079,7 +1084,7 @@ export default function Dashboard() {
     },
     {
       key: "approved-completed" as StatusFilter,
-      title: "Approved/Completed",
+      title: "Approved / Completed",
       count: stats.approvedCompleted,
       icon: CheckCircle,
       iconClass: "text-green-600",
@@ -1270,6 +1275,22 @@ export default function Dashboard() {
               </div>
 
               {/* Account Name - showing email prefix and role */}
+              <div className="text-right">
+                <p className="font-semibold text-gray-900">
+                  {user?.name || user?.email?.split("@")[0]}
+                </p>
+                <p className="text-sm text-gray-500 capitalize">{user?.role}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => setShowProfileModal(true)}
+                >
+                  Edit profile
+                </Button>
+              </div>
+
+              {/* Account Name - showing email prefix and role */}
 
               {/* Admin-only employee menu */}
               {user?.role === "admin" && (
@@ -1454,6 +1475,7 @@ export default function Dashboard() {
             </div>
             <div className="flex justify-end">
               <Button
+                className="w-full rounded-xl"
                 onClick={handleChangePassword}
                 disabled={isPasswordChanging}
               >
@@ -1502,7 +1524,7 @@ export default function Dashboard() {
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           {statusCards.map((card) => {
             const isActive = selectedStatusFilter === card.key;
             const onClick = () =>
@@ -1523,7 +1545,7 @@ export default function Dashboard() {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-600 text-sm font-medium">
+                    <p className="text-gray-600 text-sm font-medium leading-tight">
                       {card.title}
                     </p>
                     <p className="text-3xl font-bold text-gray-900 mt-2">
@@ -2098,15 +2120,15 @@ export default function Dashboard() {
             {/* Modal Content */}
             <div className="p-6 space-y-6">
               {/* Key Information Grid */}
-              <div className="grid grid-cols-3 gap-4 items-start">
-                <div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-start">
+                <div className="min-w-0">
                   <p className="text-xs text-gray-500 uppercase font-semibold">
                     Type
                   </p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <div className="mt-1">
                       <select
-                        className="text-base font-medium text-gray-900 px-2 py-1 border border-gray-300 rounded w-full"
+                        className="h-9 w-full truncate rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
                         value={editForm.documentType || ""}
                         onChange={(e) =>
                           setEditForm({
@@ -2169,14 +2191,14 @@ export default function Dashboard() {
                     </p>
                   )}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs text-gray-500 uppercase font-semibold">
                     Source
                   </p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <div className="mt-1">
                       <select
-                        className="text-base font-medium text-gray-900 px-2 py-1 border border-gray-300 rounded w-full"
+                        className="h-9 w-full truncate rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
                         value={editForm.source || ""}
                         onChange={(e) =>
                           setEditForm({ ...editForm, source: e.target.value })
@@ -2225,7 +2247,7 @@ export default function Dashboard() {
                   )}
                 </div>
                 {/* QR Code — spans 2 rows */}
-                <div className="row-span-2 flex flex-col items-center justify-center">
+                <div className="row-span-2 flex w-36 flex-col items-center justify-center justify-self-center sm:justify-self-end">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -2236,7 +2258,7 @@ export default function Dashboard() {
                   >
                     <QRCodeSVG
                       value={`${window.location.origin}/dashboard?doc=${selectedDoc.id}`}
-                      size={200}
+                      size={128}
                       level="M"
                       className="rounded"
                     />
@@ -2245,13 +2267,13 @@ export default function Dashboard() {
                     Tap to expand
                   </p>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs text-gray-500 uppercase font-semibold">
                     Assigned To
                   </p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <select
-                      className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
+                      className="mt-1 h-9 w-full truncate rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
                       value={editForm.assignedTo || ""}
                       onChange={(e) =>
                         setEditForm({ ...editForm, assignedTo: e.target.value })
@@ -2275,14 +2297,14 @@ export default function Dashboard() {
                     </p>
                   )}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs text-gray-500 uppercase font-semibold">
                     Deadline
                   </p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <input
                       type="date"
-                      className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
+                      className="mt-1 h-9 w-full rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
                       value={editForm.deadline || ""}
                       onChange={(e) =>
                         setEditForm({ ...editForm, deadline: e.target.value })
@@ -2299,13 +2321,13 @@ export default function Dashboard() {
               {/* Destination field - only for outgoing documents (LGU Office source) */}
               {(editForm.source === "LGU Office" ||
                 selectedDoc.destination) && (
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs text-gray-500 uppercase font-semibold">
                     Destination
                   </p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <select
-                      className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
+                      className="mt-1 h-9 w-full truncate rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
                       value={editForm.destination || ""}
                       onChange={(e) =>
                         setEditForm({
@@ -3581,67 +3603,7 @@ export default function Dashboard() {
                 Document:{" "}
                 <span className="font-semibold">{selectedDoc.title}</span>
               </p>
-        
-      {/* Creation Loading Modal */}
-      {showCreationLoading && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[80]">
-          <div className="bg-white rounded-2xl max-w-md w-full p-8 flex flex-col items-center gap-6">
-            <div className="text-center">
-              <h3 className="text-lg font-bold text-gray-900">Creating...</h3>
-              <p className="text-sm text-gray-600 mt-2">Please wait while we process your request</p>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-1 overflow-hidden">
-              <div className="bg-primary h-full animate-[loading-bar_1.2s_ease-in-out_infinite]" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Creation Confirmation Modal */}
-      {creationConfirmation && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[80]">
-          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden">
-            <div className="bg-green-100 border-l-4 border-green-500 p-6">
-              <h3 className="font-bold text-green-900 text-lg">
-                {creationConfirmation.type === "document"
-                  ? "Document Created"
-                  : "Staff Member Added"}
-              </h3>
-            </div>
-            <div className="p-8 text-center space-y-6">
-              <div className="flex justify-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-8 h-8 text-green-600" />
-                </div>
-              </div>
-              
-              {creationConfirmation.type === "document" ? (
-                <div>
-                  <p className="text-gray-600 text-sm mb-3">Document DTN:</p>
-                  <p className="text-2xl font-bold text-green-600 font-mono bg-green-50 px-4 py-3 rounded-lg border-2 border-green-200">
-                    {creationConfirmation.dtnOrName}
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-gray-600 text-sm mb-3">Staff Member:</p>
-                  <p className="text-2xl font-bold text-green-600 bg-green-50 px-4 py-3 rounded-lg border-2 border-green-200">
-                    {creationConfirmation.dtnOrName}
-                  </p>
-                </div>
-              )}
-
-              <Button
-                onClick={() => setCreationConfirmation(null)}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2"
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
 
             <div className="p-6 space-y-4">
               <div>
@@ -3716,10 +3678,71 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Creation Loading Modal */}
+      {showCreationLoading && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[80]">
+          <div className="bg-white rounded-2xl max-w-md w-full p-8 flex flex-col items-center gap-6">
+            <div className="text-center">
+              <h3 className="text-lg font-bold text-gray-900">Creating...</h3>
+              <p className="text-sm text-gray-600 mt-2">Please wait while we process your request</p>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-1 overflow-hidden">
+              <div className="bg-primary h-full animate-[loading-bar_1.2s_ease-in-out_infinite]" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Creation Confirmation Modal */}
+      {creationConfirmation && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[80]">
+          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden">
+            <div className="bg-green-100 border-l-4 border-green-500 p-6">
+              <h3 className="font-bold text-green-900 text-lg">
+                {creationConfirmation.type === "document"
+                  ? "Document Created"
+                  : "Staff Member Added"}
+              </h3>
+            </div>
+            <div className="p-8 text-center space-y-6">
+              <div className="flex justify-center">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-8 h-8 text-green-600" />
+                </div>
+              </div>
+              
+              {creationConfirmation.type === "document" ? (
+                <div>
+                  <p className="text-gray-600 text-sm mb-3">Document DTN:</p>
+                  <p className="text-2xl font-bold text-green-600 font-mono bg-green-50 px-4 py-3 rounded-lg border-2 border-green-200">
+                    {creationConfirmation.dtnOrName}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-gray-600 text-sm mb-3">Staff Member:</p>
+                  <p className="text-2xl font-bold text-green-600 bg-green-50 px-4 py-3 rounded-lg border-2 border-green-200">
+                    {creationConfirmation.dtnOrName}
+                  </p>
+                </div>
+              )}
+
+              <Button
+                onClick={() => setCreationConfirmation(null)}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function formatStatusChangeTitle(oldStatus: string, newStatus: string): string {
-  throw new Error("Function not implemented.");
+  if (!oldStatus) return `Status changed to ${newStatus}`;
+  return `Status changed from ${oldStatus} to ${newStatus}`;
 }
