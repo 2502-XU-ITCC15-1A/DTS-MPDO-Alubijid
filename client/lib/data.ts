@@ -48,6 +48,44 @@ export async function deleteEmployee(id: string) {
   return response.json();
 }
 
+export async function updateEmployeeProfile(
+  id: string,
+  name: string,
+  department: string | null,
+) {
+  const response = await fetch("/api/user/update-profile", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ id, name, department }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error || "Failed to update profile.");
+  }
+
+  return response.json();
+}
+
+export async function changeUserPassword(email: string, newPassword: string) {
+  const response = await fetch("/api/user/change-password", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ email, newPassword }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error || "Failed to change password.");
+  }
+
+  return response.json();
+}
+
 // ── Documents ─────────────────────────────────────────────────────────────────
 
 export async function getDocuments(): Promise<Document[]> {
