@@ -142,6 +142,7 @@ export async function createDocument(
 export async function updateDocument(
   id: string,
   fields: Partial<{
+    title: string;
     status: string;
     assignedTo: string;
     source: string;
@@ -152,6 +153,7 @@ export async function updateDocument(
   const mapped: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
+  if (fields.title) mapped.title = fields.title;
   if (fields.status) mapped.status = fields.status;
   if (fields.assignedTo) mapped.assigned_to = fields.assignedTo;
   if (fields.source) mapped.source = fields.source;
