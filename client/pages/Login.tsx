@@ -1,4 +1,6 @@
 import { useState } from "react";
+
+const API = import.meta.env.VITE_API_URL ?? "";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
@@ -43,7 +45,7 @@ export default function Login() {
     setForgotError("");
     setForgotLoading(true);
     try {
-      const res = await fetch("/api/send-otp", {
+      const res = await fetch(`${API}/api/send-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: forgotEmail.trim() }),
@@ -64,7 +66,7 @@ export default function Login() {
     setForgotError("");
     setForgotLoading(true);
     try {
-      const res = await fetch("/api/verify-otp", {
+      const res = await fetch(`${API}/api/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: forgotEmail.trim(), otp: forgotOtp.trim() }),
@@ -86,7 +88,7 @@ export default function Login() {
     setForgotError("");
     setForgotLoading(true);
     try {
-      const res = await fetch("/api/reset-password", {
+      const res = await fetch(`${API}/api/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resetToken: forgotToken, password: forgotPassword }),

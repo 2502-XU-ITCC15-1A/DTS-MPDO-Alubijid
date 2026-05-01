@@ -1,4 +1,6 @@
 import { useState } from "react";
+
+const API = import.meta.env.VITE_API_URL ?? "";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { FileText, Eye, EyeOff, CheckCircle } from "lucide-react";
@@ -23,7 +25,7 @@ export default function Signup() {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("/api/check-email", {
+      const res = await fetch(`${API}/api/check-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -53,7 +55,7 @@ export default function Signup() {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("/api/create-account", {
+      const res = await fetch(`${API}/api/create-account`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, name, personalEmail }),

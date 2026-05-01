@@ -1,6 +1,8 @@
 import { supabase } from "@/lib/supabase";
 import { Employee, Document, RoutingAction } from "@shared/api";
 
+const API = import.meta.env.VITE_API_URL ?? "";
+
 // ── Employees ─────────────────────────────────────────────────────────────────
 
 export async function getEmployees(): Promise<Employee[]> {
@@ -31,7 +33,7 @@ export async function updateEmployeeRole(id: string, role: "admin" | "staff") {
 
 export async function deleteEmployee(id: string) {
   const response = await fetch(
-    `/api/delete-employee/${encodeURIComponent(id)}`,
+    `${API}/api/delete-employee/${encodeURIComponent(id)}`,
     {
       method: "DELETE",
       headers: {
@@ -54,7 +56,7 @@ export async function updateEmployeeProfile(
   department: string | null,
   personal_email?: string | null,
 ) {
-  const response = await fetch("/api/user/update-profile", {
+  const response = await fetch(`${API}/api/user/update-profile`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -71,7 +73,7 @@ export async function updateEmployeeProfile(
 }
 
 export async function changeUserPassword(email: string, newPassword: string) {
-  const response = await fetch("/api/user/change-password", {
+  const response = await fetch(`${API}/api/user/change-password`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -226,7 +228,7 @@ export async function updateDocument(
 
 export async function deleteDocument(id: string) {
   // Delete the Google Drive folder and all files inside it
-  const driveRes = await fetch(`/api/delete-folder/${encodeURIComponent(id)}`, {
+  const driveRes = await fetch(`${API}/api/delete-folder/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (!driveRes.ok) {
@@ -243,7 +245,7 @@ export async function deleteDocument(id: string) {
 }
 
 export async function archiveDocument(documentId: string, archivedDate?: Date) {
-  const res = await fetch("/api/archive-document", {
+  const res = await fetch(`${API}/api/archive-document`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ documentId, archivedDate: (archivedDate ?? new Date()).toISOString() }),
@@ -291,7 +293,7 @@ export async function uploadFile(
     reader.readAsDataURL(file);
   });
 
-  const res = await fetch("/api/upload", {
+  const res = await fetch(`${API}/api/upload`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
