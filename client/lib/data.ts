@@ -30,16 +30,57 @@ export async function updateEmployeeRole(id: string, role: "admin" | "staff") {
 }
 
 export async function deleteEmployee(id: string) {
-  const response = await fetch(`/api/delete-employee/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `/api/delete-employee/${encodeURIComponent(id)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     throw new Error(body?.error || "Failed to delete employee.");
+  }
+
+  return response.json();
+}
+
+export async function updateEmployeeProfile(
+  id: string,
+  name: string,
+  department: string | null,
+) {
+  const response = await fetch("/api/user/update-profile", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ id, name, department }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error || "Failed to update profile.");
+  }
+
+  return response.json();
+}
+
+export async function changeUserPassword(email: string, newPassword: string) {
+  const response = await fetch("/api/user/change-password", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ email, newPassword }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error || "Failed to change password.");
   }
 
   return response.json();
@@ -80,7 +121,11 @@ export async function getDocuments(): Promise<Document[]> {
         source: doc.source,
         destination: doc.destination,
         routingSlip: doc.routing_slip,
-        revisionComments: doc.revision_comments,
+        revisionComments:
+        doc.revision_comments ??
+        doc.routing_slip?.revision_comments ??
+        doc.routing_slip?.remarks ??
+        "",
         createdAt: doc.created_at,
         updatedAt: doc.updated_at,
         files: (files ?? []).map((f) => ({
@@ -151,6 +196,7 @@ export async function updateDocument(
     source: string;
     destination: string;
     deadline: string;
+    documentType: string;
   }>,
 ) {
   const mapped: Record<string, unknown> = {
@@ -161,6 +207,7 @@ export async function updateDocument(
   if (fields.source) mapped.source = fields.source;
   if (fields.destination !== undefined) mapped.destination = fields.destination;
   if (fields.deadline) mapped.deadline = fields.deadline;
+  if (fields.documentType) mapped.type = fields.documentType;
 
   const { error } = await supabase
     .from("documents")
@@ -188,7 +235,10 @@ export async function deleteDocument(id: string) {
 }
 
 export async function deleteDocumentFile(fileId: string) {
-  const { error } = await supabase.from("document_files").delete().eq("id", fileId);
+  const { error } = await supabase
+    .from("document_files")
+    .delete()
+    .eq("id", fileId);
   if (error) throw error;
 }
 
@@ -284,8 +334,18 @@ export async function reviseDocument(
   revisor: string,
   oldStatus?: string,
 ) {
+  const { data: existingDoc, error: fetchError } = await supabase
+    .from("documents")
+    .select("assigned_to, routing_slip")
+    .eq("id", documentId)
+    .single();
+
+  if (fetchError || !existingDoc) {
+    throw fetchError || new Error("Document not found.");
+  }
+
   const mapped: Record<string, unknown> = {
-    status: "Pending",
+    status: "Needs revision",
     revision_comments: comments,
     updated_at: new Date().toISOString(),
   };
@@ -294,8 +354,39 @@ export async function reviseDocument(
     .from("documents")
     .update(mapped)
     .eq("id", documentId);
-  if (error) throw error;
 
+  if (error) {
+    const unknownColumnError =
+      error.message?.includes("revision_comments") ||
+      error.message?.includes("schema cache");
+
+    if (!unknownColumnError) {
+      throw error;
+    }
+
+    const fallbackRoutingSlip = {
+      ...(existingDoc.routing_slip || {}),
+      revision_comments: comments,
+    };
+
+    const { error: fallbackError } = await supabase
+      .from("documents")
+      .update({
+        status: "Needs revision",
+        routing_slip: fallbackRoutingSlip,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", documentId);
+
+    if (fallbackError) throw fallbackError;
+  }
+
+  await addAuditLog(
+    documentId,
+    "Revision requested",
+    revisor,
+    `Sent revision comments to ${existingDoc.assigned_to}`,
+  );
   await addAuditLog(
     documentId,
     "Document Revised",
@@ -307,13 +398,25 @@ export async function reviseDocument(
 // ── Static data ────────────────────────────────────────────────────────────────
 
 export const locations = [
+  "Human Resource Management Office",
+  "Local Civil Registrar",
   "Mayor's Office",
-  "National Agency",
-  "Public Applicant",
-  "LGU Office",
-  "Planning Department",
-  "Engineering Department",
-  "Finance Department",
+  "Municipal Accounting Office",
+  "Municipal Assessor's Office",
+  "Municipal Budget Office",
+  "Municipal Economic Enterprise & Development Office – Market, Slaughterhouse, Cemetery",
+  "Municipal Engineering Office",
+  "Municipal Environment and Natural Resources Office",
+  "Municipal Health Office",
+  "Municipal Planning and Development Office",
+  "Municipal Social Welfare and Development Office",
+  "Municipal Treasury Office",
+  "Office of the Agricultural Services",
+  "Sangguniang Bayan Office",
+  "DILG Office",
+  "Alubijid Municipal Police Station",
+  "Alubijid Fire Station",
+  "Others",
 ];
 
 export const routingActionOptions: RoutingAction[] = [
