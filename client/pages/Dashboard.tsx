@@ -325,23 +325,6 @@ export default function Dashboard() {
   );
   const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
   const [newSourceName, setNewSourceName] = useState("");
-  const [showRevisionModal, setShowRevisionModal] = useState(false);
-  const [revisionComments, setRevisionComments] = useState("");
-  const [showRevisionPanel, setShowRevisionPanel] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [profileName, setProfileName] = useState("");
-  const [profileDepartment, setProfileDepartment] = useState("");
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [isProfileSaving, setIsProfileSaving] = useState(false);
-  const [isPasswordChanging, setIsPasswordChanging] = useState(false);
-  const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
-  const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
-  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
-  const notificationSeenRef = useRef(false);
-  const [isApprovingDoc, setIsApprovingDoc] = useState(false);
-  const [isRevisingDoc, setIsRevisingDoc] = useState(false);
 
   // Load employees and documents from Supabase on mount
   useEffect(() => {
@@ -703,6 +686,7 @@ export default function Dashboard() {
 
   const handleAddEmployee = async () => {
     if (!newEmployeeData.name.trim()) return;
+    setShowCreationLoading(true);
     const email = `${newEmployeeData.name.toLowerCase().replace(/\s+/g, ".")}@alubijid.gov.ph`;
     try {
       const newEmployee = await addEmployee({
@@ -712,8 +696,12 @@ export default function Dashboard() {
         department: newEmployeeData.designation,
       });
       setEmployees([...employees, newEmployee]);
+      setShowCreationLoading(false);
+      setCreationConfirmation({ type: "employee", dtnOrName: newEmployeeData.name });
     } catch (err) {
       console.error("Failed to add employee:", err);
+      setShowCreationLoading(false);
+      toast.error("Failed to add employee.");
     }
     setNewEmployeeData({
       name: "",
@@ -754,8 +742,7 @@ export default function Dashboard() {
         assignedTo: editForm.assignedTo,
         source: editForm.source,
         destination: editForm.destination,
-        deadline: resolvedDeadline,
-        documentType: editForm.documentType,
+        deadline: editForm.deadline,
       });
 
       // Log every field that actually changed
@@ -801,6 +788,17 @@ export default function Dashboard() {
           "Destination Updated",
           actor,
           `"${selectedDoc.destination || "None"}" → "${editForm.destination || "None"}"`,
+        );
+      }
+      if (
+        JSON.stringify(editRoutingActions) !==
+        JSON.stringify(selectedDoc.routingSlip?.actions || [])
+      ) {
+        await addAuditLog(
+          selectedDoc.id,
+          "Routing Actions Updated",
+          actor,
+          `Actions: ${editRoutingActions.join(", ")}`,
         );
       }
 
@@ -1529,6 +1527,9 @@ export default function Dashboard() {
                         deadline: doc.deadline || "",
                         destination: doc.destination || "",
                       });
+                      setEditRoutingActions(doc.routingSlip?.actions || []);
+                      setShowNewRoutingActionInput(false);
+                      setNewRoutingActionName("");
                     }}
                   >
                     <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
@@ -1537,7 +1538,7 @@ export default function Dashboard() {
                           <h4 className="text-lg font-semibold text-gray-900 truncate">
                             {doc.title}
                           </h4>
-                          <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded text-gray-700 whitespace-nowrap">
+                          <span className="text-xs font-mono bg-green-100 px-2 py-1 rounded text-green-700 whitespace-nowrap font-semibold">
                             {doc.id}
                           </span>
                         </div>
@@ -2341,37 +2342,204 @@ export default function Dashboard() {
                   <h4 className="font-semibold text-gray-900 mb-4">
                     Routing Slip
                   </h4>
-                  <div className="bg-blue-50 p-4 rounded-lg space-y-4">
-                    {/* Actions */}
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900 mb-2">
-                        Actions Required:
-                      </p>
-                      <div className="space-y-1">
-                        {selectedDoc.routingSlip.actions.map((action, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center gap-2 text-sm text-gray-700"
-                          >
-                            <div className="w-2 h-2 bg-primary rounded-full"></div>
-                            {action}
+                  {docViewMode === "edit" ? (
+                    <div className="bg-blue-50 p-4 rounded-lg space-y-4 border border-blue-200">
+                      {/* Editable Actions */}
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 mb-3">
+                          Actions Required:
+                        </p>
+                        <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-white">
+                          {routingActionOptions.map((action) => (
+                            <label
+                              key={action}
+                              className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={editRoutingActions.includes(action as RoutingAction)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setEditRoutingActions([
+                                      ...editRoutingActions,
+                                      action as RoutingAction,
+                                    ]);
+                                    setShowNewRoutingActionInput(false);
+                                  } else {
+                                    setEditRoutingActions(
+                                      editRoutingActions.filter(
+                                        (a) => a !== action,
+                                      ),
+                                    );
+                                  }
+                                }}
+                                className="rounded border-gray-300"
+                              />
+                              <span className="text-sm text-gray-700">
+                                {action}
+                              </span>
+                            </label>
+                          ))}
+                          {customRoutingActions.map((action) => (
+                            <label
+                              key={action}
+                              className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={editRoutingActions.includes(action as RoutingAction)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setEditRoutingActions([
+                                      ...editRoutingActions,
+                                      action as RoutingAction,
+                                    ]);
+                                    setShowNewRoutingActionInput(false);
+                                  } else {
+                                    setEditRoutingActions(
+                                      editRoutingActions.filter(
+                                        (a) => a !== action,
+                                      ),
+                                    );
+                                  }
+                                }}
+                                className="rounded border-gray-300"
+                              />
+                              <span className="text-sm text-gray-700 italic">
+                                {action}
+                              </span>
+                            </label>
+                          ))}
+                          <label className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer border-t pt-3">
+                            <input
+                              type="checkbox"
+                              checked={showNewRoutingActionInput}
+                              onChange={(e) => {
+                                setShowNewRoutingActionInput(e.target.checked);
+                                if (!e.target.checked) {
+                                  setNewRoutingActionName("");
+                                }
+                              }}
+                              className="rounded border-gray-300"
+                            />
+                            <span className="text-sm text-gray-700 font-medium">
+                              Others
+                            </span>
+                          </label>
+                        </div>
+
+                        {/* New Routing Action Input */}
+                        {showNewRoutingActionInput && (
+                          <div className="mt-3 flex gap-2">
+                            <input
+                              type="text"
+                              value={newRoutingActionName}
+                              onChange={(e) =>
+                                setNewRoutingActionName(e.target.value)
+                              }
+                              placeholder="Enter new routing action"
+                              onKeyDown={(e) => {
+                                if (
+                                  e.key === "Enter" &&
+                                  newRoutingActionName.trim()
+                                ) {
+                                  const newAction =
+                                    newRoutingActionName.trim();
+                                  if (!customRoutingActions.includes(newAction)) {
+                                    const updated = [
+                                      ...customRoutingActions,
+                                      newAction,
+                                    ];
+                                    setCustomRoutingActions(updated);
+                                    localStorage.setItem(
+                                      "customRoutingActions",
+                                      JSON.stringify(updated),
+                                    );
+                                    setEditRoutingActions([
+                                      ...editRoutingActions,
+                                      newAction as RoutingAction,
+                                    ]);
+                                    setNewRoutingActionName("");
+                                  }
+                                }
+                              }}
+                              className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
+                            />
+                            <button
+                              onClick={() => {
+                                if (newRoutingActionName.trim()) {
+                                  const newAction =
+                                    newRoutingActionName.trim();
+                                  if (!customRoutingActions.includes(newAction)) {
+                                    const updated = [
+                                      ...customRoutingActions,
+                                      newAction,
+                                    ];
+                                    setCustomRoutingActions(updated);
+                                    localStorage.setItem(
+                                      "customRoutingActions",
+                                      JSON.stringify(updated),
+                                    );
+                                    setEditRoutingActions([
+                                      ...editRoutingActions,
+                                      newAction as RoutingAction,
+                                    ]);
+                                    setNewRoutingActionName("");
+                                  }
+                                }
+                              }}
+                              className="p-1 bg-primary hover:bg-primary/90 text-white rounded transition"
+                              title="Confirm"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowNewRoutingActionInput(false);
+                                setNewRoutingActionName("");
+                              }}
+                              className="p-1 bg-gray-300 hover:bg-gray-400 text-white rounded transition"
+                              title="Cancel"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
                           </div>
-                        ))}
+                        )}
                       </div>
                     </div>
-
-                    {/* Remarks */}
-                    {selectedDoc.routingSlip.remarks && (
+                  ) : (
+                    <div className="bg-blue-50 p-4 rounded-lg space-y-4">
+                      {/* Actions - View Mode */}
                       <div>
                         <p className="text-sm font-semibold text-gray-900 mb-2">
-                          Remarks:
+                          Actions Required:
                         </p>
-                        <p className="text-sm text-gray-700 italic">
-                          {selectedDoc.routingSlip.remarks}
-                        </p>
+                        <div className="space-y-1">
+                          {selectedDoc.routingSlip.actions.map((action, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center gap-2 text-sm text-gray-700"
+                            >
+                              <div className="w-2 h-2 bg-primary rounded-full"></div>
+                              {action}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    )}
-                  </div>
+
+                      {/* Remarks */}
+                      {selectedDoc.routingSlip.remarks && (
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900 mb-2">
+                            Remarks:
+                          </p>
+                          <p className="text-sm text-gray-700 italic">
+                            {selectedDoc.routingSlip.remarks}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -3046,6 +3214,7 @@ export default function Dashboard() {
           onSubmit={async (wizardData) => {
             if (isSubmitting) return;
             setIsSubmitting(true);
+            setShowCreationLoading(true);
             try {
               // Get the name of the assigned staff member
               const assignedStaff = employees.find(
@@ -3089,8 +3258,13 @@ export default function Dashboard() {
 
               const updated = await getDocuments();
               setDocuments(updated);
+              
+              // Show confirmation
+              setShowCreationLoading(false);
+              setCreationConfirmation({ type: "document", dtnOrName: dtn });
             } catch (err) {
               console.error("Failed to create document:", err);
+              setShowCreationLoading(false);
               toast.error("Failed to create document.");
             } finally {
               setIsSubmitting(false);
@@ -3107,93 +3281,6 @@ export default function Dashboard() {
             setRoutingRemarks("");
           }}
         />
-      )}
-
-      {/* Revision Comments Modal */}
-      {showRevisionModal && selectedDoc && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-lg w-full">
-            <div className="bg-yellow-100 border-l-4 border-yellow-500 p-6">
-              <h3 className="font-bold text-yellow-900 text-lg">
-                Revision Comments
-              </h3>
-              <p className="text-yellow-700 text-sm mt-2">
-                Document:{" "}
-                <span className="font-semibold">{selectedDoc.title}</span>
-              </p>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Comments for Staff
-                </label>
-                <textarea
-                  value={revisionComments}
-                  onChange={(e) => setRevisionComments(e.target.value)}
-                  placeholder="Enter revision comments that will be sent back to the staff..."
-                  rows={5}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 resize-none"
-                />
-              </div>
-
-              <div className="bg-yellow-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-700">
-                  <span className="font-semibold">Note:</span> These comments
-                  will be displayed to the staff member with the document when
-                  it's sent back.
-                </p>
-              </div>
-
-              <div className="flex gap-3">
-                <Button
-                  onClick={() => {
-                    setShowRevisionModal(false);
-                    setRevisionComments("");
-                  }}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={async () => {
-                    if (!revisionComments.trim() || !selectedDoc) {
-                      toast.error("Please enter revision comments.");
-                      return;
-                    }
-                    setIsRevisingDoc(true);
-                    try {
-                      await reviseDocument(
-                        selectedDoc.id,
-                        revisionComments,
-                        user?.name || "Admin",
-                      );
-                      const updated = await getDocuments();
-                      setDocuments(updated);
-                      const refreshed = updated.find(
-                        (d) => d.id === selectedDoc.id,
-                      );
-                      if (refreshed) setSelectedDoc(refreshed);
-                      toast.success("Document revised and sent back to staff.");
-                      setShowRevisionModal(false);
-                      setRevisionComments("");
-                    } catch (err: any) {
-                      console.error("Failed to revise document:", err);
-                      toast.error(err.message || "Failed to revise document.");
-                    } finally {
-                      setIsRevisingDoc(false);
-                    }
-                  }}
-                  disabled={isRevisingDoc}
-                  className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {isRevisingDoc ? "Sending..." : "Send Revision"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

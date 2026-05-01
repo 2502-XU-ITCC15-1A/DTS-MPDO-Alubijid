@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Trash2,
   CheckCircle,
+  X,
 } from "lucide-react";
 // import { mockEmployees, locations, routingActionOptions } from "@/lib/data";
 import { getEmployees, locations, routingActionOptions } from "@/lib/data";
@@ -19,7 +20,7 @@ interface DocumentWizardProps {
     documentType: string;
     source: string;
     assignedTo: string;
-    deadline: string;
+    deadline: string | null;
     documentDirection: "Incoming" | "Outgoing";
     routingActions: RoutingAction[];
     routingRemarks: string;
@@ -49,7 +50,7 @@ export default function DocumentWizard({
     documentType: "",
     source: "",
     assignedTo: "",
-    deadline: "",
+    deadline: "" as string | null,
     documentDirection: "Incoming" as "Incoming" | "Outgoing",
   });
   const [selectedRoutingActions, setSelectedRoutingActions] = useState<
@@ -75,6 +76,10 @@ export default function DocumentWizard({
   const [customSources, setCustomSources] = useState<string[]>([]);
   const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
   const [newSourceName, setNewSourceName] = useState("");
+  const [customRoutingActions, setCustomRoutingActions] = useState<string[]>([]);
+  const [newRoutingActionName, setNewRoutingActionName] = useState("");
+  const [showNewRoutingActionInput, setShowNewRoutingActionInput] =
+    useState(false);
 
   useEffect(() => {
     const loadEmployees = async () => {
@@ -83,14 +88,18 @@ export default function DocumentWizard({
     };
     loadEmployees();
 
-    // Load custom types and sources from localStorage
+    // Load custom types, sources, and routing actions from localStorage
     const savedCustomTypes = localStorage.getItem("customDocumentTypes");
     const savedCustomSources = localStorage.getItem("customSources");
+    const savedCustomRoutingActions = localStorage.getItem("customRoutingActions");
     if (savedCustomTypes) {
       setCustomDocumentTypes(JSON.parse(savedCustomTypes));
     }
     if (savedCustomSources) {
       setCustomSources(JSON.parse(savedCustomSources));
+    }
+    if (savedCustomRoutingActions) {
+      setCustomRoutingActions(JSON.parse(savedCustomRoutingActions));
     }
   }, []);
 
@@ -101,7 +110,6 @@ export default function DocumentWizard({
       if (!formData.title) errors.add("title");
       if (!formData.documentType) errors.add("documentType");
       if (!formData.source) errors.add("source");
-      if (!formData.deadline) errors.add("deadline");
     }
 
     if (currentStep === 2) {
@@ -162,8 +170,7 @@ export default function DocumentWizard({
   const isStep1Valid =
     formData.title &&
     formData.documentType &&
-    formData.source &&
-    formData.deadline;
+    formData.source;
   const isStep2Valid = formData.assignedTo;
   const isStep3Valid = isStep1Valid && isStep2Valid;
 
@@ -386,9 +393,21 @@ export default function DocumentWizard({
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Deadline <span className="text-red-500">*</span>
                 </label>
+                <button
+                type="button"
+                className="text-sm text-gray-500 hover:text-black mb-2"
+                onClick={() => {
+                  setFormData({ ...formData, deadline: null });
+                  const newErrors = new Set(validationErrors);
+                  newErrors.delete("deadline");
+                  setValidationErrors(newErrors);
+                }}
+              >
+                — No deadline —
+              </button>
                 <input
                   type="date"
-                  value={formData.deadline}
+                  value={formData.deadline || ""}
                   onChange={(e) => {
                     setFormData({ ...formData, deadline: e.target.value });
                     if (e.target.value && validationErrors.has("deadline")) {
@@ -513,13 +532,14 @@ export default function DocumentWizard({
                     >
                       <input
                         type="checkbox"
-                        checked={selectedRoutingActions.includes(action)}
+                        checked={selectedRoutingActions.includes(action as RoutingAction)}
                         onChange={(e) => {
                           if (e.target.checked) {
                             setSelectedRoutingActions([
                               ...selectedRoutingActions,
-                              action,
+                              action as RoutingAction,
                             ]);
+                            setShowNewRoutingActionInput(false);
                           } else {
                             setSelectedRoutingActions(
                               selectedRoutingActions.filter(
@@ -533,7 +553,120 @@ export default function DocumentWizard({
                       <span className="text-sm text-gray-700">{action}</span>
                     </label>
                   ))}
+                  {customRoutingActions.map((action) => (
+                    <label
+                      key={action}
+                      className="flex items-center gap-3 p-2 hover:bg-white rounded cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedRoutingActions.includes(action as RoutingAction)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedRoutingActions([
+                              ...selectedRoutingActions,
+                              action as RoutingAction,
+                            ]);
+                            setShowNewRoutingActionInput(false);
+                          } else {
+                            setSelectedRoutingActions(
+                              selectedRoutingActions.filter(
+                                (a) => a !== action,
+                              ),
+                            );
+                          }
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm text-gray-700 italic">{action}</span>
+                    </label>
+                  ))}
+                  <label className="flex items-center gap-3 p-2 hover:bg-white rounded cursor-pointer border-t pt-3">
+                    <input
+                      type="checkbox"
+                      checked={showNewRoutingActionInput}
+                      onChange={(e) => {
+                        setShowNewRoutingActionInput(e.target.checked);
+                        if (!e.target.checked) {
+                          setNewRoutingActionName("");
+                        }
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <span className="text-sm text-gray-700 font-medium">Others</span>
+                  </label>
                 </div>
+
+                {/* New Routing Action Input */}
+                {showNewRoutingActionInput && (
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      type="text"
+                      value={newRoutingActionName}
+                      onChange={(e) => setNewRoutingActionName(e.target.value)}
+                      placeholder="Enter new routing action"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newRoutingActionName.trim()) {
+                          const newAction = newRoutingActionName.trim();
+                          if (!customRoutingActions.includes(newAction)) {
+                            const updated = [
+                              ...customRoutingActions,
+                              newAction,
+                            ];
+                            setCustomRoutingActions(updated);
+                            localStorage.setItem(
+                              "customRoutingActions",
+                              JSON.stringify(updated),
+                            );
+                            setSelectedRoutingActions([
+                              ...selectedRoutingActions,
+                              newAction as RoutingAction,
+                            ]);
+                            setNewRoutingActionName("");
+                          }
+                        }
+                      }}
+                      className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <button
+                      onClick={() => {
+                        if (newRoutingActionName.trim()) {
+                          const newAction = newRoutingActionName.trim();
+                          if (!customRoutingActions.includes(newAction)) {
+                            const updated = [
+                              ...customRoutingActions,
+                              newAction,
+                            ];
+                            setCustomRoutingActions(updated);
+                            localStorage.setItem(
+                              "customRoutingActions",
+                              JSON.stringify(updated),
+                            );
+                            setSelectedRoutingActions([
+                              ...selectedRoutingActions,
+                              newAction as RoutingAction,
+                            ]);
+                            setNewRoutingActionName("");
+                          }
+                        }
+                      }}
+                      className="p-1 bg-primary hover:bg-primary/90 text-white rounded transition"
+                      title="Confirm"
+                    >
+                      ✓
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowNewRoutingActionInput(false);
+                        setNewRoutingActionName("");
+                      }}
+                      className="p-1 bg-gray-300 hover:bg-gray-400 text-white rounded transition"
+                      title="Cancel"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -595,7 +728,7 @@ export default function DocumentWizard({
                     Deadline
                   </p>
                   <p className="text-sm font-medium text-gray-900 mt-1">
-                    {formData.deadline || "—"}
+                    {formData.deadline ? formData.deadline : "No deadline"}
                   </p>
                 </div>
                 <div className="border-b pb-3">
