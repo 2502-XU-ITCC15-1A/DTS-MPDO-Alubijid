@@ -1055,7 +1055,7 @@ export default function Dashboard() {
     },
     {
       key: "approved-completed" as StatusFilter,
-      title: "Approved/Completed",
+      title: "Approved / Completed",
       count: stats.approvedCompleted,
       icon: CheckCircle,
       iconClass: "text-green-600",
@@ -1494,7 +1494,7 @@ export default function Dashboard() {
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           {statusCards.map((card) => {
             const isActive = selectedStatusFilter === card.key;
             const onClick = () =>
@@ -1515,7 +1515,7 @@ export default function Dashboard() {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-600 text-sm font-medium">
+                    <p className="text-gray-600 text-sm font-medium leading-tight">
                       {card.title}
                     </p>
                     <p className="text-3xl font-bold text-gray-900 mt-2">
