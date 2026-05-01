@@ -438,42 +438,58 @@ export default function DocumentWizard({
                   className="hidden"
                   accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
                   multiple
-                  onChange={(e) =>
-                    setSelectedFiles(Array.from(e.target.files ?? []))
-                  }
+                  onChange={(e) => {
+                    const newFiles = Array.from(e.target.files ?? []);
+                    setSelectedFiles((prev) => {
+                      const existing = new Set(prev.map((f) => f.name + f.size));
+                      const toAdd = newFiles.filter((f) => !existing.has(f.name + f.size));
+                      return [...prev, ...toAdd];
+                    });
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
                 />
 
                 {/* Drop Zone */}
                 <div
-                  className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary transition cursor-pointer"
+                  className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-primary transition cursor-pointer"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                   {selectedFiles.length > 0 ? (
-                    <div>
-                      <p className="text-sm text-primary font-medium">
-                        {selectedFiles.length} file
-                        {selectedFiles.length > 1 ? "s" : ""} selected
-                      </p>
-                      <div className="mt-2 text-left text-xs text-gray-500 space-y-1">
-                        {selectedFiles.map((file) => (
-                          <p key={file.name} className="truncate">
-                            {file.name}
-                          </p>
-                        ))}
-                      </div>
-                    </div>
+                    <p className="text-sm text-primary font-medium">
+                      {selectedFiles.length} file{selectedFiles.length > 1 ? "s" : ""} selected — click to add more
+                    </p>
                   ) : (
                     <p className="text-sm text-gray-600">
                       Drag and drop or{" "}
-                      <span className="text-primary font-medium">
-                        click to upload
-                      </span>
+                      <span className="text-primary font-medium">click to upload</span>
+                      <span className="block text-xs text-gray-400 mt-1">You can select multiple files</span>
                     </p>
                   )}
                 </div>
 
-                {/* Upload / Clear selection */}
+                {/* File list with individual remove buttons */}
+                {selectedFiles.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {selectedFiles.map((file, i) => (
+                      <div key={file.name + file.size} className="flex items-center justify-between gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                        <p className="text-xs text-gray-700 truncate flex-1">{file.name}</p>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedFiles((prev) => prev.filter((_, idx) => idx !== i));
+                          }}
+                          className="text-red-400 hover:text-red-600 flex-shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Upload / Clear all */}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
                     onClick={(e) => {
@@ -484,7 +500,7 @@ export default function DocumentWizard({
                     className="flex items-center gap-2"
                   >
                     <Upload className="w-3.5 h-3.5" />
-                    Upload files
+                    {selectedFiles.length > 0 ? "Add more files" : "Upload files"}
                   </Button>
                   {selectedFiles.length > 0 && (
                     <Button
@@ -497,7 +513,7 @@ export default function DocumentWizard({
                       className="flex items-center gap-1"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      Remove file{selectedFiles.length > 1 ? "s" : ""}
+                      Remove all
                     </Button>
                   )}
                 </div>

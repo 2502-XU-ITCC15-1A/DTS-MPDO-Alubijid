@@ -286,7 +286,7 @@ export default function Dashboard() {
   const [openMenuDocId, setOpenMenuDocId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadModalFile, setUploadModalFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -2567,7 +2567,8 @@ export default function Dashboard() {
                   type="file"
                   className="hidden"
                   accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-                  onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                  multiple
+                  onChange={(e) => setSelectedFiles(Array.from(e.target.files ?? []))}
                 />
 
                 {/* File Drop Zone */}
@@ -2576,79 +2577,61 @@ export default function Dashboard() {
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                  {selectedFile ? (
-                    <p className="text-sm text-primary font-medium">
-                      {selectedFile.name}
-                    </p>
+                  {selectedFiles.length > 0 ? (
+                    <div className="space-y-1">
+                      {selectedFiles.map((f, i) => (
+                        <p key={i} className="text-sm text-primary font-medium truncate">{f.name}</p>
+                      ))}
+                    </div>
                   ) : (
                     <p className="text-sm text-gray-600">
                       Drag and drop or{" "}
-                      <span className="text-primary font-medium">
-                        click to upload
-                      </span>
+                      <span className="text-primary font-medium">click to upload</span>
+                      <span className="block text-xs text-gray-400 mt-1">You can select multiple files</span>
                     </p>
                   )}
                 </div>
 
-                {selectedFile && (
+                {selectedFiles.length > 0 && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      setSelectedFile(null);
+                      setSelectedFiles([]);
                       if (fileInputRef.current) fileInputRef.current.value = "";
                     }}
                     className="mt-2 w-full text-gray-600"
                   >
-                    Clear
+                    Clear selection
                   </Button>
                 )}
 
-                <div className="flex gap-2 mt-3">
+                <div className="mt-3">
                   <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSelectedFile(null);
-                      if (fileInputRef.current) fileInputRef.current.value = "";
-                      setUploadError(null);
-                    }}
-                    className="flex-1 text-gray-600"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    disabled={!selectedFile || isUploading}
+                    disabled={selectedFiles.length === 0 || isUploading}
                     onClick={async () => {
-                      if (!selectedFile) return;
+                      if (selectedFiles.length === 0) return;
                       setIsUploading(true);
                       setUploadError(null);
                       try {
-                        await uploadFile(
-                          selectedDoc.id,
-                          selectedFile,
-                          user?.name || "User",
-                        );
+                        for (const file of selectedFiles) {
+                          await uploadFile(selectedDoc.id, file, user?.name || "User");
+                        }
                         const updated = await getDocuments();
                         setDocuments(updated);
-                        const refreshed = updated.find(
-                          (d) => d.id === selectedDoc.id,
-                        );
+                        const refreshed = updated.find((d) => d.id === selectedDoc.id);
                         if (refreshed) setSelectedDoc(refreshed);
-                        setSelectedFile(null);
-                        if (fileInputRef.current)
-                          fileInputRef.current.value = "";
+                        setSelectedFiles([]);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
                       } catch (err: any) {
-                        setUploadError(
-                          err.message ||
-                            "Upload failed. Make sure the backend server is running.",
-                        );
+                        setUploadError(err.message || "Upload failed. Make sure the backend server is running.");
                       } finally {
                         setIsUploading(false);
                       }
                     }}
-                    className="flex-1 bg-primary hover:bg-primary/90 text-white disabled:opacity-50"
+                    className="w-full bg-primary hover:bg-primary/90 text-white disabled:opacity-50"
                   >
-                    {isUploading ? "Uploading..." : "Upload File"}
+                    {isUploading ? "Uploading..." : `Upload File${selectedFiles.length > 1 ? `s (${selectedFiles.length})` : ""}`}
                   </Button>
                 </div>
                 {uploadError && (
