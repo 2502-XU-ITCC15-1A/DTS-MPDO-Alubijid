@@ -197,6 +197,28 @@ const parseStoredList = (key: string) => {
   }
 };
 
+const getQrBaseUrl = () => {
+  const configuredUrl = import.meta.env.VITE_PUBLIC_APP_URL;
+  return (configuredUrl || window.location.origin).replace(/\/+$/, "");
+};
+
+const getDocumentQrUrl = (documentId: string) =>
+  `${getQrBaseUrl()}/dashboard?doc=${encodeURIComponent(documentId)}`;
+
+const getDocumentIdFromQrText = (text: string) => {
+  try {
+    const url = new URL(text);
+    const docId = url.searchParams.get("doc");
+    if (docId) return docId;
+  } catch {}
+
+  const dtnMatch = text.match(/DTN:([^|]+)/);
+  if (dtnMatch) return dtnMatch[1].trim();
+
+  const plainDtnMatch = text.match(/DTN-\d{4}-\d+/i);
+  return plainDtnMatch?.[0] ?? null;
+};
+
 const getStatusValue = (status: Document["status"]) =>
   status === "Released" ? "Approved" : status;
 
@@ -684,14 +706,16 @@ export default function Dashboard() {
   // Auto-open document from ?doc= URL param (set when QR code is scanned)
   useEffect(() => {
     const docId = searchParams.get("doc");
-    if (!docId || documents.length === 0) return;
+    if (!docId || loading) return;
     const found = documents.find((d) => d.id === docId);
     if (found) {
       setSelectedDoc(found);
       setDocViewMode("view");
       setSearchParams({}, { replace: true });
+    } else {
+      toast.error(`Document ${docId} was not found or is not accessible.`);
     }
-  }, [documents, searchParams]);
+  }, [documents, loading, searchParams, setSearchParams]);
 
   // Startt camera scanner
   const startScanner = async () => {
@@ -736,34 +760,15 @@ export default function Dashboard() {
   const handleQrResult = async (text: string) => {
     await stopScanner();
 
-    // New URL format: https://.../?doc=DTN-XXXX
-    try {
-      const url = new URL(text);
-      const docId = url.searchParams.get("doc");
-      if (docId) {
-        const found = documents.find((d) => d.id === docId);
-        if (found) {
-          setSelectedDoc(found);
-          setDocViewMode("view");
-        } else {
-          setScanResult(`Document ${docId} not found in the system.`);
-          setShowScannerModal(true);
-        }
-        return;
-      }
-    } catch {}
-
-    // Legacy format: DTN:DTN-2026-001|TITLE:...|STATUS:...
-    const dtnMatch = text.match(/DTN:([^|]+)/);
-    if (dtnMatch) {
-      const docId = dtnMatch[1];
+    const docId = getDocumentIdFromQrText(text);
+    if (docId) {
       const found = documents.find((d) => d.id === docId);
       if (found) {
         setSelectedDoc(found);
         setDocViewMode("view");
+        setSearchParams({}, { replace: true });
       } else {
-        setScanResult(`Document ${docId} not found in the system.`);
-        setShowScannerModal(true);
+        window.location.href = `/dashboard?doc=${encodeURIComponent(docId)}`;
       }
       return;
     }
@@ -1153,7 +1158,7 @@ export default function Dashboard() {
     isArchiving;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen overflow-x-hidden bg-gray-50">
       {/* Global loading bar */}
       {isProcessing && (
         <div className="fixed top-0 left-0 right-0 z-[100] h-1 bg-primary/20">
@@ -1162,15 +1167,15 @@ export default function Dashboard() {
       )}
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
-                <FileText className="w-6 h-6 text-white" />
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
+                <FileText className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
               </div>
-              <h1 className="text-2xl font-bold text-primary">MPDO Tracker</h1>
+              <h1 className="truncate text-lg sm:text-2xl font-bold text-primary">MPDO Tracker</h1>
             </div>
-            <div className="flex items-center gap-6">
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5 sm:gap-4">
               {/* Notifications */}
               <div className="relative">
                 <button
@@ -1186,7 +1191,7 @@ export default function Dashboard() {
                   )}
                 </button>
                 {showNotificationPanel && (
-                  <div className="absolute right-0 mt-2 w-96 max-h-[420px] rounded-3xl border border-slate-200 bg-white/95 shadow-2xl backdrop-blur-xl z-50">
+                  <div className="fixed left-3 right-3 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-96 max-h-[min(420px,calc(100dvh-5rem))] rounded-3xl border border-slate-200 bg-white/95 shadow-2xl backdrop-blur-xl z-50">
                     <div className="flex items-center justify-between gap-3 border-b border-slate-200/80 bg-slate-50 px-4 py-4">
                       <div>
                         <p className="text-sm font-semibold text-slate-900">
@@ -1295,7 +1300,7 @@ export default function Dashboard() {
                   </button>
 
                   {showEmployeeMenu && (
-                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden">
+                    <div className="fixed left-3 right-3 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden">
                       {/* Panel Header */}
                       <div className="bg-gradient-to-r from-primary to-primary/80 px-4 py-3 flex justify-between items-center">
                         <div>
@@ -1419,7 +1424,7 @@ export default function Dashboard() {
               </button>
 
               {/* Account Name */}
-              <div className="text-right border-l border-gray-200 pl-4">
+              <div className="hidden md:block text-right border-l border-gray-200 pl-4">
                 <p className="font-semibold text-gray-900 text-sm">
                   {user?.name || user?.email?.split("@")[0]}
                 </p>
@@ -1431,7 +1436,7 @@ export default function Dashboard() {
       </header>
 
       <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
-        <DialogContent className="max-w-md rounded-2xl p-0 overflow-hidden shadow-xl border-0">
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-2xl p-0 overflow-hidden shadow-xl border-0">
 
           {/* Gradient Header */}
           <div className="bg-gradient-to-br from-primary to-primary/80 px-6 pt-6 pb-8 relative">
@@ -1519,7 +1524,7 @@ export default function Dashboard() {
                   className="h-9 rounded-lg text-sm border-gray-200"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <div className="grid gap-1.5">
                   <Label htmlFor="new-password" className="text-xs font-medium text-gray-600">New password</Label>
                   <Input
@@ -1556,44 +1561,44 @@ export default function Dashboard() {
       </Dialog>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
         {/* User Profile Section */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-                <User className="w-6 h-6 text-gray-600" />
+        <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-200 mb-4 sm:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <User className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">
+                <h2 className="text-base sm:text-xl font-semibold text-gray-900">
                   {user?.name || user?.email?.split("@")[0]}
                 </h2>
-                <p className="text-sm text-gray-500 capitalize">{user?.role}</p>
+                <p className="text-xs sm:text-sm text-gray-500 capitalize">{user?.role}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 onClick={() => setShowProfileModal(true)}
-                className="flex items-center gap-2 px-4 py-2 text-primary border-primary/40 hover:bg-primary/5 hover:border-primary font-medium rounded-lg transition-all duration-200 shadow-sm"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-primary border-primary/40 hover:bg-primary/5 hover:border-primary font-medium rounded-lg transition-all duration-200 shadow-sm text-sm"
               >
                 <Edit className="w-4 h-4" />
-                Edit Profile
+                <span>Edit Profile</span>
               </Button>
               <Button
                 variant="outline"
                 onClick={handleLogout}
-                className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-red-600 border-red-200 hover:bg-red-50 text-sm"
               >
                 <LogOut className="w-4 h-4" />
-                Logout
+                <span>Logout</span>
               </Button>
             </div>
           </div>
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-3 sm:gap-4 mb-6 sm:mb-8">
           {statusCards.map((card) => {
             const isActive = selectedStatusFilter === card.key;
             const onClick = () =>
@@ -1610,23 +1615,23 @@ export default function Dashboard() {
                 key={card.key}
                 type="button"
                 onClick={onClick}
-                className={`bg-white rounded-xl p-6 shadow-sm border ${activeClasses} text-left transition hover:shadow-md`}
+                className={`bg-white rounded-xl p-3 sm:p-6 shadow-sm border ${activeClasses} text-left transition hover:shadow-md min-h-[6.5rem]`}
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-600 text-sm font-medium leading-tight">
+                    <p className="text-gray-600 text-xs sm:text-sm font-medium leading-tight">
                       {card.title}
                     </p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">
+                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1 sm:mt-2">
                       {card.count}
                     </p>
                   </div>
                   <div
-                    className={`w-12 h-12 ${card.bgClass} rounded-lg flex items-center justify-center`}
+                    className={`w-9 h-9 sm:w-12 sm:h-12 ${card.bgClass} rounded-lg flex items-center justify-center`}
                   >
                     {(() => {
                       const Icon = card.icon;
-                      return <Icon className={`w-6 h-6 ${card.iconClass}`} />;
+                      return <Icon className={`w-4 h-4 sm:w-6 sm:h-6 ${card.iconClass}`} />;
                     })()}
                   </div>
                 </div>
@@ -1657,42 +1662,42 @@ export default function Dashboard() {
         {/* Document Management */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           {/* Tabs and Controls */}
-          <div className="border-b border-gray-200 p-6">
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex gap-4">
+          <div className="border-b border-gray-200 p-3 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4 sm:mb-6">
+              <div className="flex gap-2 sm:gap-4 overflow-x-auto scrollbar-none pb-1">
                 <button
                   onClick={() => setActiveTab("all")}
-                  className={`pb-2 font-medium border-b-2 transition ${
+                  className={`pb-2 font-medium border-b-2 transition whitespace-nowrap text-sm sm:text-base ${
                     activeTab === "all"
                       ? "border-primary text-primary"
                       : "border-transparent text-gray-600 hover:text-gray-900"
                   }`}
                 >
-                  All Documents
+                  All
                 </button>
                 <button
                   onClick={() => setActiveTab("incoming")}
-                  className={`pb-2 font-medium border-b-2 transition ${
+                  className={`pb-2 font-medium border-b-2 transition whitespace-nowrap text-sm sm:text-base ${
                     activeTab === "incoming"
                       ? "border-primary text-primary"
                       : "border-transparent text-gray-600 hover:text-gray-900"
                   }`}
                 >
-                  Incoming Documents
+                  Incoming
                 </button>
                 <button
                   onClick={() => setActiveTab("outgoing")}
-                  className={`pb-2 font-medium border-b-2 transition ${
+                  className={`pb-2 font-medium border-b-2 transition whitespace-nowrap text-sm sm:text-base ${
                     activeTab === "outgoing"
                       ? "border-primary text-primary"
                       : "border-transparent text-gray-600 hover:text-gray-900"
                   }`}
                 >
-                  Outgoing Documents
+                  Outgoing
                 </button>
                 <button
                   onClick={() => setActiveTab("archived")}
-                  className={`pb-2 font-medium border-b-2 transition flex items-center gap-1.5 ${
+                  className={`pb-2 font-medium border-b-2 transition flex items-center gap-1.5 whitespace-nowrap text-sm sm:text-base ${
                     activeTab === "archived"
                       ? "border-slate-500 text-slate-600"
                       : "border-transparent text-gray-600 hover:text-gray-900"
@@ -1706,18 +1711,18 @@ export default function Dashboard() {
               {user?.role === "admin" && (
                 <Button
                   onClick={() => setShowUploadModal(true)}
-                  className="bg-primary hover:bg-primary/90 text-white flex gap-2"
+                  className="bg-primary hover:bg-primary/90 text-white flex gap-2 w-full sm:w-auto justify-center"
                   title="Upload Document"
                 >
                   <Upload className="w-4 h-4" />
-                  <span className="hidden sm:inline">Upload Document</span>
+                  <span>Upload Document</span>
                 </Button>
               )}
             </div>
 
             {/* Search and Filter */}
-            <div className="flex gap-2 flex-wrap">
-              <div className="flex-1 min-w-[250px] relative">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <div className="relative min-w-0 flex-1">
                 <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
@@ -1734,7 +1739,7 @@ export default function Dashboard() {
                 <select
                   value={filterAssignedTo}
                   onChange={(e) => setFilterAssignedTo(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
+                  className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
                 >
                   <option value="all">All Assigned</option>
                   {employees
@@ -1752,7 +1757,7 @@ export default function Dashboard() {
                 <select
                   value={filterDeadline}
                   onChange={(e) => setFilterDeadline(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
+                  className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
                 >
                   <option value="all">All Deadlines</option>
                   <option value="overdue">Overdue</option>
@@ -1785,7 +1790,7 @@ export default function Dashboard() {
                 return (
                   <div
                     key={doc.id}
-                    className="p-6 hover:bg-gray-50 transition cursor-pointer border-l-4"
+                    className="p-3 sm:p-6 hover:bg-gray-50 transition cursor-pointer border-l-4"
                     style={{
                       borderLeftColor: statusColor.accent,
                     }}
@@ -1804,10 +1809,10 @@ export default function Dashboard() {
                       setNewRoutingActionName("");
                     }}
                   >
-                    <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
-                          <h4 className="text-lg font-semibold text-gray-900 truncate">
+                          <h4 className="text-base sm:text-lg font-semibold text-gray-900 break-words sm:truncate">
                             {doc.title}
                           </h4>
                           <span className="text-xs font-mono bg-green-100 px-2 py-1 rounded text-green-700 whitespace-nowrap font-semibold">
@@ -1820,7 +1825,7 @@ export default function Dashboard() {
                             </span>
                           )}
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-sm text-gray-600">
+                        <div className="grid grid-cols-1 gap-3 text-sm text-gray-600 min-[520px]:grid-cols-2 lg:grid-cols-4">
                           <div>
                             <p className="text-xs text-gray-500">Type</p>
                             <p className="font-medium text-gray-900">
@@ -1848,7 +1853,7 @@ export default function Dashboard() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:flex-shrink-0 xl:justify-end">
                         <Select
                           value={getStatusValue(doc.status)}
                           onValueChange={(value) =>
@@ -1860,7 +1865,7 @@ export default function Dashboard() {
                         >
                           <SelectTrigger
                             onClick={(e) => e.stopPropagation()}
-                            className={`rounded-full border ${statusColor.border} ${statusColor.bg} text-left px-3 py-1.5 h-9 inline-flex items-center gap-2 w-fit min-w-[10rem]`}
+                            className={`rounded-full border ${statusColor.border} ${statusColor.bg} text-left px-3 py-1.5 h-9 inline-flex items-center gap-2 w-full min-w-0 sm:w-fit sm:min-w-[10rem]`}
                           >
                             <StatusIcon
                               className={`w-4 h-4 ${statusColor.text}`}
@@ -1961,11 +1966,11 @@ export default function Dashboard() {
       {/* Document Detail Modal */}
       {selectedDoc && (
         <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-black/50 flex items-stretch justify-center p-0 sm:items-center sm:p-4 z-50"
           onClick={() => setSelectedDoc(null)}
         >
           <div
-            className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-white w-full max-w-4xl max-h-[100dvh] overflow-y-auto rounded-none sm:max-h-[90dvh] sm:rounded-2xl"
             onClick={(e) => {
               e.stopPropagation();
               // Initialize source when modal opens
@@ -1975,11 +1980,11 @@ export default function Dashboard() {
             }}
           >
             {/* Modal Header */}
-            <div className="sticky top-0 bg-gradient-to-r from-primary to-secondary text-white p-6">
-              <div className="flex justify-between items-start">
+            <div className="sticky top-0 bg-gradient-to-r from-primary to-secondary text-white p-4 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex-1 min-w-0 mr-4">
                   {editingTitle ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                       <input
                         autoFocus
                         value={titleDraft}
@@ -2006,7 +2011,7 @@ export default function Dashboard() {
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-start gap-2">
                       <h3 className="text-2xl font-bold truncate">{selectedDoc.title}</h3>
                     </div>
                   )}
@@ -2020,7 +2025,7 @@ export default function Dashboard() {
                     </p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                   {/* Action buttons - admin only, visible in both modes */}
                   {user?.role === "admin" && (
                     <>
@@ -2187,9 +2192,9 @@ export default function Dashboard() {
             </div>
 
             {/* Modal Content */}
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-6">
               {/* Key Information Grid */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-start">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-start">
                 <div className="min-w-0">
                   <p className="text-xs text-gray-500 uppercase font-semibold">
                     Type
@@ -2316,7 +2321,7 @@ export default function Dashboard() {
                   )}
                 </div>
                 {/* QR Code — spans 2 rows */}
-                <div className="row-span-2 flex w-36 flex-col items-center justify-center justify-self-center sm:justify-self-end">
+                <div className="flex w-full flex-col items-center justify-center justify-self-center md:row-span-2 md:w-36 md:justify-self-end">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -2326,7 +2331,7 @@ export default function Dashboard() {
                     title="View QR Code"
                   >
                     <QRCodeSVG
-                      value={`${window.location.origin}/dashboard?doc=${selectedDoc.id}`}
+                      value={getDocumentQrUrl(selectedDoc.id)}
                       size={128}
                       level="M"
                       className="rounded"
@@ -2424,86 +2429,90 @@ export default function Dashboard() {
                 <p className="text-xs text-gray-500 uppercase font-semibold mb-2">
                   Status
                 </p>
-                {docViewMode === "edit" || user?.role === "staff" ? (
-                  <Select
-                    value={editForm.status || ""}
-                    onValueChange={(value) => {
-                      const nextStatus = value as Document["status"];
-                      setEditForm({
-                        ...editForm,
-                        status: nextStatus,
-                      });
-                      if (user?.role === "staff") {
-                        handleDocStatusChange(selectedDoc.id, nextStatus);
-                        return;
-                      }
-                      if (nextStatus === "Approved") {
-                        setShowApprovalWorkflow(true);
-                      }
-                    }}
-                  >
-                    <SelectTrigger>
-                      {editForm.status ? (
-                        <div className="flex items-center gap-2">
-                          {(() => {
-                            const selectedStatus = getStatusDetails(
-                              editForm.status,
-                            );
-                            const SelectedIcon = selectedStatus.icon;
-                            return (
-                              <>
-                                <SelectedIcon
-                                  className={`w-4 h-4 ${selectedStatus.text}`}
-                                />
-                                <span
-                                  className={`text-sm font-medium ${selectedStatus.text}`}
-                                >
-                                  {selectedStatus.label}
-                                </span>
-                              </>
-                            );
-                          })()}
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-500">
-                          Select status
-                        </span>
-                      )}
-                    </SelectTrigger>
-                    <SelectContent>
-                      {statusOptions.map((option) => {
-                        const OptionIcon = option.icon;
-                        return (
-                          <SelectItem key={option.value} value={option.value}>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="min-w-0 flex-1">
+                    {docViewMode === "edit" || user?.role === "staff" ? (
+                      <Select
+                        value={editForm.status || ""}
+                        onValueChange={(value) => {
+                          const nextStatus = value as Document["status"];
+                          setEditForm({
+                            ...editForm,
+                            status: nextStatus,
+                          });
+                          if (user?.role === "staff") {
+                            handleDocStatusChange(selectedDoc.id, nextStatus);
+                            return;
+                          }
+                          if (nextStatus === "Approved") {
+                            setShowApprovalWorkflow(true);
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          {editForm.status ? (
                             <div className="flex items-center gap-2">
-                              <OptionIcon
-                                className={`w-4 h-4 ${option.text}`}
-                              />
-                              <span>{option.label}</span>
+                              {(() => {
+                                const selectedStatus = getStatusDetails(
+                                  editForm.status,
+                                );
+                                const SelectedIcon = selectedStatus.icon;
+                                return (
+                                  <>
+                                    <SelectedIcon
+                                      className={`w-4 h-4 ${selectedStatus.text}`}
+                                    />
+                                    <span
+                                      className={`text-sm font-medium ${selectedStatus.text}`}
+                                    >
+                                      {selectedStatus.label}
+                                    </span>
+                                  </>
+                                );
+                              })()}
                             </div>
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg w-full">
-                    {(() => {
-                      const details = getStatusDetails(selectedDoc.status);
-                      const StatusIcon = details.icon;
-                      return (
-                        <>
-                          <StatusIcon className={`w-4 h-4 ${details.text}`} />
-                          <span
-                            className={`text-lg font-medium ${details.text}`}
-                          >
-                            {details.label}
-                          </span>
-                        </>
-                      );
-                    })()}
+                          ) : (
+                            <span className="text-sm text-gray-500">
+                              Select status
+                            </span>
+                          )}
+                        </SelectTrigger>
+                        <SelectContent>
+                          {statusOptions.map((option) => {
+                            const OptionIcon = option.icon;
+                            return (
+                              <SelectItem key={option.value} value={option.value}>
+                                <div className="flex items-center gap-2">
+                                  <OptionIcon
+                                    className={`w-4 h-4 ${option.text}`}
+                                  />
+                                  <span>{option.label}</span>
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg w-full">
+                        {(() => {
+                          const details = getStatusDetails(selectedDoc.status);
+                          const StatusIcon = details.icon;
+                          return (
+                            <>
+                              <StatusIcon className={`w-4 h-4 ${details.text}`} />
+                              <span
+                                className={`text-base sm:text-lg font-medium ${details.text}`}
+                              >
+                                {details.label}
+                              </span>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
 
               {/* File Upload Section */}
@@ -2516,7 +2525,7 @@ export default function Dashboard() {
                     selectedDoc.files.map((file) => (
                       <div
                         key={file.id}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                        className="flex flex-col gap-3 p-3 bg-gray-50 rounded-lg sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div className="flex-1 min-w-0 mr-2">
                           <p className="text-sm font-medium text-gray-900 truncate">
@@ -3103,7 +3112,7 @@ export default function Dashboard() {
               className="p-4 bg-white rounded-xl border-4 border-primary/20 shadow-inner"
             >
               <QRCodeSVG
-                value={`${window.location.origin}/dashboard?doc=${selectedDoc.id}`}
+                value={getDocumentQrUrl(selectedDoc.id)}
                 size={260}
                 level="H"
                 marginSize={2}
