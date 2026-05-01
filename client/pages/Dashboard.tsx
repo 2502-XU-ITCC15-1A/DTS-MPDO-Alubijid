@@ -131,12 +131,6 @@ const statusOptions = [
     text: "text-blue-700",
   },
   {
-    value: "Approved",
-    label: "Completed",
-    icon: CheckCircle,
-    text: "text-green-700",
-  },
-  {
     value: "Overdue",
     label: "Overdue",
     icon: AlertCircle,
@@ -155,6 +149,12 @@ const statusOptions = [
     text: "text-orange-700",
   },
   {
+    value: "Approved",
+    label: "Approved",
+    icon: CheckCircle,
+    text: "text-green-700",
+  },
+  {
     value: "Completed",
     label: "Completed",
     icon: CheckCircle,
@@ -163,15 +163,10 @@ const statusOptions = [
 ] as const;
 
 const getStatusDetails = (status: string) => {
-  if (
-    status === "Approved" ||
-    status === "Released" ||
-    status === "Completed"
-  ) {
-    return statusOptions[2];
-  }
+  const resolvedStatus = status === "Released" ? "Approved" : status;
   return (
-    statusOptions.find((option) => option.value === status) ?? statusOptions[0]
+    statusOptions.find((option) => option.value === resolvedStatus) ??
+    statusOptions[0]
   );
 };
 
@@ -191,24 +186,7 @@ const parseStoredList = (key: string) => {
 const getStatusValue = (status: Document["status"]) =>
   status === "Released" ? "Approved" : status;
 
-const getStatusLabel = (status: Document["status"] | string | undefined) =>
-  status ? getStatusDetails(status).label : "Unknown";
-
-const formatStatusChange = (
-  oldStatus: Document["status"] | string | undefined,
-  newStatus: Document["status"] | string,
-) => `Changed from ${getStatusLabel(oldStatus)} to ${getStatusLabel(newStatus)}`;
-
-const formatStatusChangeTitle = (
-  oldStatus: Document["status"] | string | undefined,
-  newStatus: Document["status"] | string,
-) => `Status Changed: ${getStatusLabel(oldStatus)} → ${getStatusLabel(newStatus)}`;
-
-const getDocumentCreatedTime = (doc: Document) => {
-  const value = doc.createdAt || doc.submittedDate || doc.timestamp;
-  const parsed = new Date(value).getTime();
-  return Number.isNaN(parsed) ? 0 : parsed;
-};
+type StatusFilter = Document["status"] | "approved-completed" | "all";
 
 const documentTypeFilters: DocumentType[] = [
   "Received",
@@ -284,6 +262,8 @@ export default function Dashboard() {
   const [approvalRemarks, setApprovalRemarks] = useState("");
   const [filterAssignedTo, setFilterAssignedTo] = useState<string>("all");
   const [filterDeadline, setFilterDeadline] = useState<string>("all");
+  const [selectedStatusFilter, setSelectedStatusFilter] =
+    useState<StatusFilter>("all");
   const [openMenuDocId, setOpenMenuDocId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
@@ -938,40 +918,98 @@ export default function Dashboard() {
     pending: visibleDocuments.filter((d) => d.status === "Pending").length,
     processing: visibleDocuments.filter((d) => d.status === "Processing")
       .length,
-    completed: visibleDocuments.filter(
+    overdue: visibleDocuments.filter((d) => d.status === "Overdue").length,
+    sentForApproval: visibleDocuments.filter(
+      (d) => d.status === "Sent for approval",
+    ).length,
+    needsRevision: visibleDocuments.filter((d) => d.status === "Needs revision")
+      .length,
+    approvedCompleted: visibleDocuments.filter(
       (d) =>
         d.status === "Approved" ||
         d.status === "Released" ||
         d.status === "Completed",
     ).length,
-    overdue: visibleDocuments.filter((d) => d.status === "Overdue").length,
-    sentForApproval: visibleDocuments.filter(
-      (d) => d.status === "Sent for approval",
-    ).length,
   };
+
+  const statusCards = [
+    {
+      key: "Pending" as StatusFilter,
+      title: "Pending",
+      count: stats.pending,
+      icon: AlertCircle,
+      iconClass: "text-yellow-600",
+      bgClass: "bg-yellow-100",
+    },
+    {
+      key: "Processing" as StatusFilter,
+      title: "Processing",
+      count: stats.processing,
+      icon: HourglassIcon,
+      iconClass: "text-blue-600",
+      bgClass: "bg-blue-100",
+    },
+    {
+      key: "Overdue" as StatusFilter,
+      title: "Overdue",
+      count: stats.overdue,
+      icon: AlertCircle,
+      iconClass: "text-red-600",
+      bgClass: "bg-red-100",
+    },
+    {
+      key: "Sent for approval" as StatusFilter,
+      title: "Sent for Approval",
+      count: stats.sentForApproval,
+      icon: HourglassIcon,
+      iconClass: "text-purple-600",
+      bgClass: "bg-purple-100",
+    },
+    {
+      key: "Needs revision" as StatusFilter,
+      title: "Needs Revision",
+      count: stats.needsRevision,
+      icon: AlertCircle,
+      iconClass: "text-orange-600",
+      bgClass: "bg-orange-100",
+    },
+    {
+      key: "approved-completed" as StatusFilter,
+      title: "Approved/Completed",
+      count: stats.approvedCompleted,
+      icon: CheckCircle,
+      iconClass: "text-green-600",
+      bgClass: "bg-green-100",
+    },
+  ];
 
   const avgResponseTime = "3.2 days";
 
-  // Filter by search (DTN or document name), document type, assignment, and deadline
-  const filteredDocuments = visibleDocuments
-    .filter((doc) => {
-      const matchesSearch =
-        doc.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        doc.title.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesDocType =
-        selectedFilter === "all" || doc.documentType === selectedFilter;
-      const matchesAssignment =
-        filterAssignedTo === "all" || doc.assignedTo === filterAssignedTo;
+  // Filter by search (DTN or document name), document type, assignment, deadline, and status
+  const filteredDocuments = visibleDocuments.filter((doc) => {
+    const matchesSearch =
+      doc.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesDocType =
+      selectedFilter === "all" || doc.documentType === selectedFilter;
+    const matchesAssignment =
+      filterAssignedTo === "all" || doc.assignedTo === filterAssignedTo;
 
-      let matchesDeadline = true;
-      if (filterDeadline !== "all") {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const docDeadline = new Date(doc.deadline);
-        docDeadline.setHours(0, 0, 0, 0);
-        const daysUntilDeadline = Math.ceil(
-          (docDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-        );
+    const matchesStatus =
+      selectedStatusFilter === "all" ||
+      (selectedStatusFilter === "approved-completed"
+        ? ["Approved", "Released", "Completed"].includes(doc.status)
+        : doc.status === selectedStatusFilter);
+
+    let matchesDeadline = true;
+    if (filterDeadline !== "all") {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const docDeadline = new Date(doc.deadline);
+      docDeadline.setHours(0, 0, 0, 0);
+      const daysUntilDeadline = Math.ceil(
+        (docDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+      );
 
         if (filterDeadline === "overdue") matchesDeadline = daysUntilDeadline < 0;
         else if (filterDeadline === "today")
@@ -982,16 +1020,14 @@ export default function Dashboard() {
           matchesDeadline = daysUntilDeadline > 7;
       }
 
-      return (
-        matchesSearch && matchesDocType && matchesAssignment && matchesDeadline
-      );
-    })
-    .sort((a, b) => getDocumentCreatedTime(b) - getDocumentCreatedTime(a));
-
-  const activeNotifications = notifications.filter(
-    (note) => !readNotificationIds.includes(note.id),
-  );
-  const unreadNotificationCount = activeNotifications.length;
+    return (
+      matchesSearch &&
+      matchesDocType &&
+      matchesAssignment &&
+      matchesStatus &&
+      matchesDeadline
+    );
+  });
 
   const isProcessing =
     isSaving ||
@@ -1339,77 +1375,45 @@ export default function Dashboard() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Pending</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {stats.pending}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                <AlertCircle className="w-6 h-6 text-yellow-600" />
-              </div>
-            </div>
-          </div>
+          {statusCards.map((card) => {
+            const isActive = selectedStatusFilter === card.key;
+            const onClick = () =>
+              setSelectedStatusFilter((current) =>
+                current === card.key ? "all" : card.key,
+              );
 
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Processing</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {stats.processing}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <HourglassIcon className="w-6 h-6 text-blue-600" />
-              </div>
-            </div>
-          </div>
+            const activeClasses = isActive
+              ? "border-primary ring-2 ring-primary/20"
+              : "border-gray-200";
 
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Completed</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {stats.completed}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Overdue</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {stats.overdue}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                <AlertCircle className="w-6 h-6 text-red-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">
-                  Sent for Approval
-                </p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {stats.sentForApproval}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <HourglassIcon className="w-6 h-6 text-purple-600" />
-              </div>
-            </div>
-          </div>
+            return (
+              <button
+                key={card.key}
+                type="button"
+                onClick={onClick}
+                className={`bg-white rounded-xl p-6 shadow-sm border ${activeClasses} text-left transition hover:shadow-md`}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-sm font-medium">
+                      {card.title}
+                    </p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2">
+                      {card.count}
+                    </p>
+                  </div>
+                  <div
+                    className={`w-12 h-12 ${card.bgClass} rounded-lg flex items-center justify-center`}
+                  >
+                    {(() => {
+                      const Icon = card.icon;
+                      return <Icon className={`w-6 h-6 ${card.iconClass}`} />;
+                    })()}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         {/* Efficiency Metrics
@@ -3039,8 +3043,19 @@ export default function Dashboard() {
                   }}
                   className="ml-2 p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-100 rounded transition-colors flex-shrink-0"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                    />
                   </svg>
                 </button>
               </div>
