@@ -348,7 +348,23 @@ export default function Dashboard() {
   const [newSourceName, setNewSourceName] = useState("");
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [revisionComments, setRevisionComments] = useState("");
-  const [showRevisionPanel, setShowRevisionPanel] = useState(false);
+  const [isApprovingDoc, setIsApprovingDoc] = useState(false);
+  const [isRevisingDoc, setIsRevisingDoc] = useState(false);
+  const [showCreationLoading, setShowCreationLoading] = useState(false);
+  const [creationConfirmation, setCreationConfirmation] = useState<{
+    type: "document" | "employee";
+    dtnOrName: string;
+  } | null>(null);
+  const [showNewRoutingActionInput, setShowNewRoutingActionInput] =
+    useState(false);
+  const [newRoutingActionName, setNewRoutingActionName] = useState("");
+  const [editRoutingActions, setEditRoutingActions] = useState<RoutingAction[]>(
+    [],
+  );
+  const [customRoutingActions, setCustomRoutingActions] = useState<string[]>(
+    () => JSON.parse(localStorage.getItem("customRoutingActions") || "[]"),
+  );
+    const [showRevisionPanel, setShowRevisionPanel] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [profileDepartment, setProfileDepartment] = useState("");
@@ -742,6 +758,7 @@ export default function Dashboard() {
 
   const handleAddEmployee = async () => {
     if (!newEmployeeData.name.trim()) return;
+    setShowCreationLoading(true);
     const email = `${newEmployeeData.name.toLowerCase().replace(/\s+/g, ".")}@alubijid.gov.ph`;
     try {
       const newEmployee = await addEmployee({
@@ -751,8 +768,12 @@ export default function Dashboard() {
         department: newEmployeeData.designation,
       });
       setEmployees([...employees, newEmployee]);
+      setShowCreationLoading(false);
+      setCreationConfirmation({ type: "employee", dtnOrName: newEmployeeData.name });
     } catch (err) {
       console.error("Failed to add employee:", err);
+      setShowCreationLoading(false);
+      toast.error("Failed to add employee.");
     }
     setNewEmployeeData({
       name: "",
@@ -856,6 +877,17 @@ export default function Dashboard() {
           "Destination Updated",
           actor,
           `"${selectedDoc.destination || "None"}" → "${editForm.destination || "None"}"`,
+        );
+      }
+      if (
+        JSON.stringify(editRoutingActions) !==
+        JSON.stringify(selectedDoc.routingSlip?.actions || [])
+      ) {
+        await addAuditLog(
+          selectedDoc.id,
+          "Routing Actions Updated",
+          actor,
+          `Actions: ${editRoutingActions.join(", ")}`,
         );
       }
 
@@ -1625,6 +1657,9 @@ export default function Dashboard() {
                         deadline: doc.deadline || "",
                         destination: doc.destination || "",
                       });
+                      setEditRoutingActions(doc.routingSlip?.actions || []);
+                      setShowNewRoutingActionInput(false);
+                      setNewRoutingActionName("");
                     }}
                   >
                     <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
@@ -1633,7 +1668,7 @@ export default function Dashboard() {
                           <h4 className="text-lg font-semibold text-gray-900 truncate">
                             {doc.title}
                           </h4>
-                          <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded text-gray-700 whitespace-nowrap">
+                          <span className="text-xs font-mono bg-green-100 px-2 py-1 rounded text-green-700 whitespace-nowrap font-semibold">
                             {doc.id}
                           </span>
                         </div>
@@ -2443,24 +2478,190 @@ export default function Dashboard() {
                   <h4 className="font-semibold text-gray-900 mb-4">
                     Routing Slip
                   </h4>
-                  <div className="bg-blue-50 p-4 rounded-lg space-y-4">
-                    {/* Actions */}
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900 mb-2">
-                        Actions Required:
-                      </p>
-                      <div className="space-y-1">
-                        {selectedDoc.routingSlip.actions.map((action, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center gap-2 text-sm text-gray-700"
-                          >
-                            <div className="w-2 h-2 bg-primary rounded-full"></div>
-                            {action}
+                  {docViewMode === "edit" ? (
+                    <div className="bg-blue-50 p-4 rounded-lg space-y-4 border border-blue-200">
+                      {/* Editable Actions */}
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 mb-3">
+                          Actions Required:
+                        </p>
+                        <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-white">
+                          {routingActionOptions.map((action) => (
+                            <label
+                              key={action}
+                              className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={editRoutingActions.includes(action as RoutingAction)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setEditRoutingActions([
+                                      ...editRoutingActions,
+                                      action as RoutingAction,
+                                    ]);
+                                    setShowNewRoutingActionInput(false);
+                                  } else {
+                                    setEditRoutingActions(
+                                      editRoutingActions.filter(
+                                        (a) => a !== action,
+                                      ),
+                                    );
+                                  }
+                                }}
+                                className="rounded border-gray-300"
+                              />
+                              <span className="text-sm text-gray-700">
+                                {action}
+                              </span>
+                            </label>
+                          ))}
+                          {customRoutingActions.map((action) => (
+                            <label
+                              key={action}
+                              className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={editRoutingActions.includes(action as RoutingAction)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setEditRoutingActions([
+                                      ...editRoutingActions,
+                                      action as RoutingAction,
+                                    ]);
+                                    setShowNewRoutingActionInput(false);
+                                  } else {
+                                    setEditRoutingActions(
+                                      editRoutingActions.filter(
+                                        (a) => a !== action,
+                                      ),
+                                    );
+                                  }
+                                }}
+                                className="rounded border-gray-300"
+                              />
+                              <span className="text-sm text-gray-700 italic">
+                                {action}
+                              </span>
+                            </label>
+                          ))}
+                          <label className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer border-t pt-3">
+                            <input
+                              type="checkbox"
+                              checked={showNewRoutingActionInput}
+                              onChange={(e) => {
+                                setShowNewRoutingActionInput(e.target.checked);
+                                if (!e.target.checked) {
+                                  setNewRoutingActionName("");
+                                }
+                              }}
+                              className="rounded border-gray-300"
+                            />
+                            <span className="text-sm text-gray-700 font-medium">
+                              Others
+                            </span>
+                          </label>
+                        </div>
+
+                        {/* New Routing Action Input */}
+                        {showNewRoutingActionInput && (
+                          <div className="mt-3 flex gap-2">
+                            <input
+                              type="text"
+                              value={newRoutingActionName}
+                              onChange={(e) =>
+                                setNewRoutingActionName(e.target.value)
+                              }
+                              placeholder="Enter new routing action"
+                              onKeyDown={(e) => {
+                                if (
+                                  e.key === "Enter" &&
+                                  newRoutingActionName.trim()
+                                ) {
+                                  const newAction =
+                                    newRoutingActionName.trim();
+                                  if (!customRoutingActions.includes(newAction)) {
+                                    const updated = [
+                                      ...customRoutingActions,
+                                      newAction,
+                                    ];
+                                    setCustomRoutingActions(updated);
+                                    localStorage.setItem(
+                                      "customRoutingActions",
+                                      JSON.stringify(updated),
+                                    );
+                                    setEditRoutingActions([
+                                      ...editRoutingActions,
+                                      newAction as RoutingAction,
+                                    ]);
+                                    setNewRoutingActionName("");
+                                  }
+                                }
+                              }}
+                              className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
+                            />
+                            <button
+                              onClick={() => {
+                                if (newRoutingActionName.trim()) {
+                                  const newAction =
+                                    newRoutingActionName.trim();
+                                  if (!customRoutingActions.includes(newAction)) {
+                                    const updated = [
+                                      ...customRoutingActions,
+                                      newAction,
+                                    ];
+                                    setCustomRoutingActions(updated);
+                                    localStorage.setItem(
+                                      "customRoutingActions",
+                                      JSON.stringify(updated),
+                                    );
+                                    setEditRoutingActions([
+                                      ...editRoutingActions,
+                                      newAction as RoutingAction,
+                                    ]);
+                                    setNewRoutingActionName("");
+                                  }
+                                }
+                              }}
+                              className="p-1 bg-primary hover:bg-primary/90 text-white rounded transition"
+                              title="Confirm"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowNewRoutingActionInput(false);
+                                setNewRoutingActionName("");
+                              }}
+                              className="p-1 bg-gray-300 hover:bg-gray-400 text-white rounded transition"
+                              title="Cancel"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
                           </div>
-                        ))}
+                        )}
                       </div>
                     </div>
+                  ) : (
+                    <div className="bg-blue-50 p-4 rounded-lg space-y-4">
+                      {/* Actions - View Mode */}
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 mb-2">
+                          Actions Required:
+                        </p>
+                        <div className="space-y-1">
+                          {selectedDoc.routingSlip.actions.map((action, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center gap-2 text-sm text-gray-700"
+                            >
+                              <div className="w-2 h-2 bg-primary rounded-full"></div>
+                              {action}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
 
                     {/* Remarks */}
                     {selectedDoc.routingSlip.remarks && (
@@ -3167,6 +3368,7 @@ export default function Dashboard() {
           onSubmit={async (wizardData) => {
             if (isSubmitting) return;
             setIsSubmitting(true);
+            setShowCreationLoading(true);
             try {
               // Get the name of the assigned staff member
               const assignedStaff = employees.find(
@@ -3214,8 +3416,13 @@ export default function Dashboard() {
 
               const updated = await getDocuments();
               setDocuments(updated);
+              
+              // Show confirmation
+              setShowCreationLoading(false);
+              setCreationConfirmation({ type: "document", dtnOrName: dtn });
             } catch (err) {
               console.error("Failed to create document:", err);
+              setShowCreationLoading(false);
               toast.error("Failed to create document.");
             } finally {
               setIsSubmitting(false);
@@ -3246,7 +3453,67 @@ export default function Dashboard() {
                 Document:{" "}
                 <span className="font-semibold">{selectedDoc.title}</span>
               </p>
+        
+      {/* Creation Loading Modal */}
+      {showCreationLoading && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[80]">
+          <div className="bg-white rounded-2xl max-w-md w-full p-8 flex flex-col items-center gap-6">
+            <div className="text-center">
+              <h3 className="text-lg font-bold text-gray-900">Creating...</h3>
+              <p className="text-sm text-gray-600 mt-2">Please wait while we process your request</p>
             </div>
+            <div className="w-full bg-gray-200 rounded-full h-1 overflow-hidden">
+              <div className="bg-primary h-full animate-[loading-bar_1.2s_ease-in-out_infinite]" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Creation Confirmation Modal */}
+      {creationConfirmation && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[80]">
+          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden">
+            <div className="bg-green-100 border-l-4 border-green-500 p-6">
+              <h3 className="font-bold text-green-900 text-lg">
+                {creationConfirmation.type === "document"
+                  ? "Document Created"
+                  : "Staff Member Added"}
+              </h3>
+            </div>
+            <div className="p-8 text-center space-y-6">
+              <div className="flex justify-center">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-8 h-8 text-green-600" />
+                </div>
+              </div>
+              
+              {creationConfirmation.type === "document" ? (
+                <div>
+                  <p className="text-gray-600 text-sm mb-3">Document DTN:</p>
+                  <p className="text-2xl font-bold text-green-600 font-mono bg-green-50 px-4 py-3 rounded-lg border-2 border-green-200">
+                    {creationConfirmation.dtnOrName}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-gray-600 text-sm mb-3">Staff Member:</p>
+                  <p className="text-2xl font-bold text-green-600 bg-green-50 px-4 py-3 rounded-lg border-2 border-green-200">
+                    {creationConfirmation.dtnOrName}
+                  </p>
+                </div>
+              )}
+
+              <Button
+                onClick={() => setCreationConfirmation(null)}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
 
             <div className="p-6 space-y-4">
               <div>
