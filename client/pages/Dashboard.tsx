@@ -249,6 +249,8 @@ export default function Dashboard() {
     "all",
   );
   const [showEmployeeMenu, setShowEmployeeMenu] = useState(false);
+  const [openRoleDropdown, setOpenRoleDropdown] = useState<string | null>(null);
+  const [employeeTab, setEmployeeTab] = useState<"all" | "admin" | "staff">("all");
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [showDoneConfirm, setShowDoneConfirm] = useState(false);
@@ -1303,77 +1305,114 @@ export default function Dashboard() {
                   </button>
 
                   {showEmployeeMenu && (
-                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                      <div className="p-4">
-                        <div className="flex justify-between items-center mb-3">
-                          <h3 className="font-semibold text-gray-900 text-sm">
-                            Employees
-                          </h3>
+                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden">
+                      {/* Panel Header */}
+                      <div className="bg-gradient-to-r from-primary to-primary/80 px-4 py-3 flex justify-between items-center">
+                        <div>
+                          <h3 className="font-semibold text-white text-sm">Employee Management</h3>
+                          <p className="text-white/60 text-xs mt-0.5">{employees.length} members</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setShowAddEmployeeModal(true);
+                            setShowEmployeeMenu(false);
+                          }}
+                          className="w-7 h-7 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition"
+                          title="Add Employee"
+                        >
+                          <Plus className="w-4 h-4 text-white" />
+                        </button>
+                      </div>
+
+                      {/* Tabs */}
+                      <div className="flex border-b border-gray-100 bg-gray-50/50">
+                        {([
+                          { key: "all", label: "All", count: employees.length },
+                          { key: "admin", label: "Admin", count: employees.filter(e => e.role === "admin").length },
+                          { key: "staff", label: "Staff", count: employees.filter(e => e.role === "staff").length },
+                        ] as { key: "all" | "admin" | "staff"; label: string; count: number }[]).map((tab) => (
                           <button
-                            onClick={() => {
-                              setShowAddEmployeeModal(true);
-                              setShowEmployeeMenu(false);
-                            }}
-                            className="p-1 hover:bg-gray-100 rounded text-primary"
-                            title="Add Employee"
+                            key={tab.key}
+                            onClick={() => setEmployeeTab(tab.key)}
+                            className={`flex-1 py-2 text-xs font-medium transition border-b-2 ${
+                              employeeTab === tab.key
+                                ? "border-primary text-primary"
+                                : "border-transparent text-gray-400 hover:text-gray-600"
+                            }`}
                           >
-                            <Plus className="w-4 h-4" />
+                            {tab.label}
+                            <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                              employeeTab === tab.key
+                                ? "bg-primary/10 text-primary"
+                                : "bg-gray-200 text-gray-500"
+                            }`}>
+                              {tab.count}
+                            </span>
                           </button>
-                        </div>
-                        <div className="space-y-2 max-h-64 overflow-y-auto">
-                          {employees.map((employee) => (
-                            <div
-                              key={employee.id}
-                              className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded"
-                            >
-                              <button
-                                onClick={() => {
-                                  setEmployeeToDelete(employee);
-                                  setShowEmployeeDeleteConfirm(true);
-                                }}
-                                className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition flex-shrink-0"
-                                title="Remove employee"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-900 truncate">
-                                  {employee.email}
-                                </p>
-                                <p className="text-xs text-gray-500 truncate">
-                                  {employee.name}
-                                </p>
-                              </div>
-                              <select
-                                value={employee.role}
-                                onChange={async (e) => {
-                                  const role = e.target.value as
-                                    | "admin"
-                                    | "staff";
-                                  try {
-                                    await updateEmployeeRole(employee.id, role);
-                                    setEmployees((prev) =>
-                                      prev.map((emp) =>
-                                        emp.id === employee.id
-                                          ? { ...emp, role }
-                                          : emp,
-                                      ),
-                                    );
-                                  } catch (err) {
-                                    console.error(
-                                      "Failed to update role:",
-                                      err,
-                                    );
-                                  }
-                                }}
-                                className="text-xs px-2 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 flex-shrink-0"
-                              >
-                                <option value="staff">Staff</option>
-                                <option value="admin">Admin</option>
-                              </select>
+                        ))}
+                      </div>
+
+                      {/* Employee List */}
+                      <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+                        {employees.filter(e => employeeTab === "all" || e.role === employeeTab).map((employee) => (
+                          <div
+                            key={employee.id}
+                            className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition group"
+                          >
+                            {/* Avatar */}
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs font-semibold text-primary">
+                                {(employee.name || employee.email).charAt(0).toUpperCase()}
+                              </span>
                             </div>
-                          ))}
-                        </div>
+
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-800 truncate">
+                                {employee.name || "—"}
+                              </p>
+                              <p className="text-xs text-gray-400 truncate">{employee.email}</p>
+                            </div>
+
+                            {/* Role Select */}
+                            <select
+                              value={employee.role}
+                              onChange={async (e) => {
+                                const role = e.target.value as "admin" | "staff";
+                                try {
+                                  await updateEmployeeRole(employee.id, role);
+                                  setEmployees((prev) =>
+                                    prev.map((emp) =>
+                                      emp.id === employee.id ? { ...emp, role } : emp,
+                                    ),
+                                  );
+                                } catch (err) {
+                                  console.error("Failed to update role:", err);
+                                }
+                              }}
+                              className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border focus:outline-none focus:ring-2 focus:ring-primary/30 flex-shrink-0 cursor-pointer transition-all
+                                ${employee.role === "admin"
+                                  ? "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"
+                                  : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                                }`}
+                            >
+                              <option value="staff">Staff</option>
+                              <option value="admin">Admin</option>
+                            </select>
+
+                            {/* Remove */}
+                            <button
+                              onClick={() => {
+                                setEmployeeToDelete(employee);
+                                setShowEmployeeDeleteConfirm(true);
+                              }}
+                              className="w-7 h-7 rounded-lg bg-red-50 border border-red-200 text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500 flex items-center justify-center transition flex-shrink-0"
+                              title="Remove employee"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
