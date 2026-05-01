@@ -48,10 +48,51 @@ export async function deleteEmployee(id: string) {
   return response.json();
 }
 
+export async function updateEmployeeProfile(
+  id: string,
+  name: string,
+  department: string | null,
+) {
+  const response = await fetch("/api/user/update-profile", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ id, name, department }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error || "Failed to update profile.");
+  }
+
+  return response.json();
+}
+
+export async function changeUserPassword(email: string, newPassword: string) {
+  const response = await fetch("/api/user/change-password", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ email, newPassword }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error || "Failed to change password.");
+  }
+
+  return response.json();
+}
+
 // ── Documents ─────────────────────────────────────────────────────────────────
 
 export async function getDocuments(): Promise<Document[]> {
-  const { data: docs, error } = await supabase.from("documents").select("*");
+  const { data: docs, error } = await supabase
+    .from("documents")
+    .select("*")
+    .order("created_at", { ascending: false });
   if (error) throw error;
 
   const documents: Document[] = await Promise.all(
@@ -104,7 +145,11 @@ export async function getDocuments(): Promise<Document[]> {
     }),
   );
 
-  return documents;
+  return documents.sort((a, b) => {
+    const aTime = new Date(a.createdAt || a.submittedDate || a.timestamp).getTime();
+    const bTime = new Date(b.createdAt || b.submittedDate || b.timestamp).getTime();
+    return bTime - aTime;
+  });
 }
 
 export async function createDocument(
@@ -258,23 +303,28 @@ export async function addAuditLog(
 export async function sendDocumentForApproval(
   documentId: string,
   approver: string,
+  oldStatus?: string,
 ) {
   await updateDocument(documentId, { status: "Sent for approval" });
   await addAuditLog(
     documentId,
     "Sent for Admin Approval",
     approver,
-    "Document submitted for admin review",
+    `Changed from ${oldStatus || "Unknown"} to Sent for approval. Document submitted for admin review`,
   );
 }
 
-export async function approveDocument(documentId: string, approver: string) {
+export async function approveDocument(
+  documentId: string,
+  approver: string,
+  oldStatus?: string,
+) {
   await updateDocument(documentId, { status: "Completed" });
   await addAuditLog(
     documentId,
     "Document Approved",
     approver,
-    "Document approved by admin",
+    `Changed from ${oldStatus || "Unknown"} to Completed. Document approved by admin`,
   );
 }
 
@@ -282,6 +332,7 @@ export async function reviseDocument(
   documentId: string,
   comments: string,
   revisor: string,
+  oldStatus?: string,
 ) {
   const { data: existingDoc, error: fetchError } = await supabase
     .from("documents")
@@ -340,7 +391,7 @@ export async function reviseDocument(
     documentId,
     "Document Revised",
     revisor,
-    `Revision comments: ${comments}`,
+    `Changed from ${oldStatus || "Unknown"} to Pending. Revision comments: ${comments}`,
   );
 }
 

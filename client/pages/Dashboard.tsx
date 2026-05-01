@@ -4,8 +4,19 @@ import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 import { Html5Qrcode } from "html5-qrcode";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
 import DocumentWizard from "@/components/DocumentWizard";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -28,6 +39,8 @@ import {
   sendDocumentForApproval,
   approveDocument,
   reviseDocument,
+  updateEmployeeProfile,
+  changeUserPassword,
   locations,
   routingActionOptions,
 } from "@/lib/data";
@@ -46,6 +59,7 @@ import {
   ScanLine,
   Plus,
   Menu,
+  Bell,
   Edit,
   Trash2,
   X,
@@ -90,9 +104,9 @@ const statusColors = {
     icon: AlertCircle,
   },
   "Sent for approval": {
-    bg: "bg-purple-50",
+    bg: "bg-purple-100",
     border: "border-purple-200",
-    text: "text-purple-700",
+    text: "text-purple-600",
     icon: HourglassIcon,
   },
   Completed: {
@@ -126,7 +140,7 @@ const statusOptions = [
     value: "Sent for approval",
     label: "Sent for Approval",
     icon: HourglassIcon,
-    text: "text-purple-700",
+    text: "text-purple-600",
   },
   {
     value: "Needs revision",
@@ -156,6 +170,19 @@ const getStatusDetails = (status: string) => {
   );
 };
 
+const getStatusColor = (status: string) =>
+  statusColors[status as keyof typeof statusColors] ?? statusColors.Pending;
+
+const parseStoredList = (key: string) => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    localStorage.removeItem(key);
+    return [];
+  }
+};
+
 const getStatusValue = (status: Document["status"]) =>
   status === "Released" ? "Approved" : status;
 
@@ -169,6 +196,15 @@ const documentTypeFilters: DocumentType[] = [
   "Approved",
   "Released",
 ];
+
+type DashboardNotification = {
+  id: string;
+  title: string;
+  message: string;
+  severity: "info" | "warning" | "urgent";
+  docId?: string;
+  read?: boolean;
+};
 
 const designationOptionsByUnit: Record<string, string[]> = {
   MPDC: ["Municipal Planning and Development Coordinator"],
@@ -186,7 +222,7 @@ const designationOptionsByUnit: Record<string, string[]> = {
 };
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUserProfile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [activeTab, setActiveTab] = useState<"all" | "incoming" | "outgoing">(
@@ -294,16 +330,28 @@ export default function Dashboard() {
     designation: designationOptionsByUnit.MPDC[0],
   });
   const [customDocumentTypes, setCustomDocumentTypes] = useState<string[]>(() =>
-    JSON.parse(localStorage.getItem("customDocumentTypes") || "[]"),
+    parseStoredList("customDocumentTypes"),
   );
   const [customSources, setCustomSources] = useState<string[]>(() =>
-    JSON.parse(localStorage.getItem("customSources") || "[]"),
+    parseStoredList("customSources"),
   );
   const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
   const [newSourceName, setNewSourceName] = useState("");
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [revisionComments, setRevisionComments] = useState("");
   const [showRevisionPanel, setShowRevisionPanel] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [profileDepartment, setProfileDepartment] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isProfileSaving, setIsProfileSaving] = useState(false);
+  const [isPasswordChanging, setIsPasswordChanging] = useState(false);
+  const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
+  const notificationSeenRef = useRef(false);
   const [isApprovingDoc, setIsApprovingDoc] = useState(false);
   const [isRevisingDoc, setIsRevisingDoc] = useState(false);
 
@@ -337,15 +385,222 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
 
     // Load custom document types and sources from localStorage
-    const savedCustomTypes = localStorage.getItem("customDocumentTypes");
-    const savedCustomSources = localStorage.getItem("customSources");
-    if (savedCustomTypes) {
-      setCustomDocumentTypes(JSON.parse(savedCustomTypes));
-    }
-    if (savedCustomSources) {
-      setCustomSources(JSON.parse(savedCustomSources));
-    }
+    setCustomDocumentTypes(parseStoredList("customDocumentTypes"));
+    setCustomSources(parseStoredList("customSources"));
   }, []);
+
+  useEffect(() => {
+    if (!user?.email) {
+      setReadNotificationIds([]);
+      return;
+    }
+
+    const key = `readNotifications:${user.email}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as string[];
+        setReadNotificationIds(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        setReadNotificationIds([]);
+      }
+    } else {
+      setReadNotificationIds([]);
+    }
+  }, [user?.email]);
+
+  useEffect(() => {
+    if (!user?.email) return;
+    const key = `readNotifications:${user.email}`;
+    localStorage.setItem(key, JSON.stringify(readNotificationIds));
+  }, [readNotificationIds, user?.email]);
+
+  useEffect(() => {
+    if (!user) return;
+    setProfileName(user.name || "");
+    setProfileDepartment(user.department || "");
+  }, [user]);
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    if (!profileName.trim()) {
+      toast.error("Name cannot be empty.");
+      return;
+    }
+
+    setIsProfileSaving(true);
+    try {
+      await updateEmployeeProfile(user.id, profileName.trim(), profileDepartment.trim() || null);
+      await refreshUserProfile();
+      toast.success("Profile updated successfully.");
+      setShowProfileModal(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not save profile. Please try again.");
+    } finally {
+      setIsProfileSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!user) return;
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error("Please fill in all password fields.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("New password and confirmation do not match.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters.");
+      return;
+    }
+
+    setIsPasswordChanging(true);
+    try {
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+
+      if (authError) {
+        throw authError;
+      }
+
+      await changeUserPassword(user.email, newPassword);
+      await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: newPassword,
+      });
+      await refreshUserProfile();
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setShowProfileModal(false);
+      toast.success("Password updated successfully.");
+    } catch (error) {
+      console.error(error);
+      toast.error("Current password is incorrect or the update failed.");
+    } finally {
+      setIsPasswordChanging(false);
+    }
+  };
+
+  const calculateNotifications = (docs: Document[]): DashboardNotification[] => {
+    if (!user) return [];
+
+    const now = new Date();
+    const notifications: DashboardNotification[] = [];
+
+    if (user.role === "staff") {
+      docs.forEach((doc) => {
+        if (doc.assignedTo !== user.email) return;
+
+        const createdDate = new Date(doc.createdAt || doc.submittedDate);
+        const createdAge = now.getTime() - createdDate.getTime();
+        const isNew = !Number.isNaN(createdDate.getTime()) && createdAge <= 24 * 60 * 60 * 1000;
+
+        const deadlineDate = new Date(doc.deadline);
+        const deadlineDiff = deadlineDate.getTime() - now.getTime();
+        const isDueTomorrow =
+          !Number.isNaN(deadlineDate.getTime()) &&
+          deadlineDiff > 0 &&
+          deadlineDiff <= 24 * 60 * 60 * 1000;
+
+        if (doc.status === "Needs revision") {
+          const revisionReason = doc.revisionComments
+            ? " Reason: " + doc.revisionComments
+            : "";
+
+          notifications.push({
+            id: `${doc.id}-revision`,
+            title: "Document needs revision",
+            message:
+              (doc.title || doc.id) +
+              " was sent back for revision." +
+              revisionReason,
+            severity: "urgent",
+            docId: doc.id,
+          });
+          return;
+        }
+
+        if (isDueTomorrow && !["Completed", "Released", "Approved"].includes(doc.status)) {
+          notifications.push({
+            id: `${doc.id}-deadline`,
+            title: "Deadline approaching",
+            message:
+              (doc.title || doc.id) +
+              " is due within 24 hours (" +
+              doc.deadline +
+              ").",
+            severity: "warning",
+            docId: doc.id,
+          });
+          return;
+        }
+
+        if (isNew) {
+          notifications.push({
+            id: `${doc.id}-new`,
+            title: "New assignment",
+            message:
+              (doc.title || doc.id) +
+              " was assigned to you within the last 24 hours.",
+            severity: "info",
+            docId: doc.id,
+          });
+        }
+      });
+    }
+
+    if (user.role === "admin") {
+      const pending = docs.filter((doc) => doc.status === "Sent for approval");
+      if (pending.length > 0) {
+        const approvalPlural = pending.length === 1 ? "" : "s";
+        const approvalVerb = pending.length === 1 ? "is" : "are";
+
+        notifications.push({
+          id: "admin-approval",
+          title: "Documents need approval",
+          message:
+            "There " + approvalVerb + " " + pending.length + " document" + approvalPlural + " waiting for admin approval.",
+          severity: "urgent",
+        });
+      }
+    }
+
+    return notifications;
+  };
+
+  useEffect(() => {
+    if (!user || documents.length === 0) return;
+
+    const notes = calculateNotifications(documents);
+    setNotifications(notes);
+
+    if (notes.length > 0 && !notificationSeenRef.current) {
+      setShowNotificationPanel(true);
+      toast(
+        "You have " +
+          notes.length +
+          " important announcement" +
+          (notes.length === 1 ? "" : "s") +
+          ".",
+      );
+      notificationSeenRef.current = true;
+    }
+  }, [documents, user]);
+
+  useEffect(() => {
+    if (showNotificationPanel) {
+      const timer = window.setTimeout(() => {
+        setShowNotificationPanel(false);
+      }, 12000);
+      return () => window.clearTimeout(timer);
+    }
+  }, [showNotificationPanel]);
 
   // Sync editForm whenever a different document is selected
   useEffect(() => {
@@ -479,12 +734,27 @@ export default function Dashboard() {
     window.location.href = "/login";
   };
 
+  const addStatusChangeLog = async (
+    documentId: string,
+    oldStatus: Document["status"] | string | undefined,
+    newStatus: Document["status"] | string,
+    actor: string,
+    note?: string,
+  ) => {
+    await addAuditLog(
+      documentId,
+      formatStatusChangeTitle(oldStatus, newStatus),
+      actor,
+      [formatStatusChange(oldStatus, newStatus), note]
+        .filter(Boolean)
+        .join(". "),
+    );
+  };
+
   const handleSaveEdits = async () => {
     if (!selectedDoc || isSaving) return;
     setIsSaving(true);
 
-    const newStatus =
-      (editForm.status as Document["status"]) || selectedDoc.status;
     const actor = user?.name || "Admin";
 
     const resolvedDeadline = editForm.deadline || selectedDoc.deadline;
@@ -511,9 +781,10 @@ export default function Dashboard() {
 
       // Log every field that actually changed
       if (effectiveStatus !== selectedDoc.status) {
-        await addAuditLog(
+        await addStatusChangeLog(
           selectedDoc.id,
-          `Status changed from ${selectedDoc.status} to ${effectiveStatus}`,
+          selectedDoc.status,
+          effectiveStatus,
           actor,
         );
       }
@@ -577,25 +848,24 @@ export default function Dashboard() {
     try {
       const doc = documents.find((d) => d.id === docId);
       const oldStatus = doc?.status || "";
+      if (oldStatus === value) return;
+
       await updateDocument(docId, { status: value });
-      await addAuditLog(
-        docId,
-        "Status Updated",
-        user?.name || "Admin",
-        `"${oldStatus}" → "${value}"`,
-      );
-      setDocuments((prev) =>
-        prev.map((doc) =>
-          doc.id === docId
-            ? { ...doc, status: value, updatedAt: new Date().toISOString() }
-            : doc,
-        ),
-      );
+      await addStatusChangeLog(docId, oldStatus, value, user?.name || "Staff");
+
+      const updated = await getDocuments();
+      setDocuments(updated);
       if (selectedDoc?.id === docId) {
-        setSelectedDoc({ ...selectedDoc, status: value });
+        const refreshed = updated.find((d) => d.id === docId);
+        if (refreshed) {
+          setSelectedDoc(refreshed);
+          setEditForm((prev) => ({ ...prev, status: refreshed.status }));
+        }
       }
+      toast.success(`Status changed to ${value}.`);
     } catch (err) {
       console.error("Failed to update status:", err);
+      toast.error("Failed to update status.");
     }
   };
 
@@ -741,14 +1011,14 @@ export default function Dashboard() {
         (docDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
       );
 
-      if (filterDeadline === "overdue") matchesDeadline = daysUntilDeadline < 0;
-      else if (filterDeadline === "today")
-        matchesDeadline = daysUntilDeadline === 0;
-      else if (filterDeadline === "this-week")
-        matchesDeadline = daysUntilDeadline >= 0 && daysUntilDeadline <= 7;
-      else if (filterDeadline === "upcoming")
-        matchesDeadline = daysUntilDeadline > 7;
-    }
+        if (filterDeadline === "overdue") matchesDeadline = daysUntilDeadline < 0;
+        else if (filterDeadline === "today")
+          matchesDeadline = daysUntilDeadline === 0;
+        else if (filterDeadline === "this-week")
+          matchesDeadline = daysUntilDeadline >= 0 && daysUntilDeadline <= 7;
+        else if (filterDeadline === "upcoming")
+          matchesDeadline = daysUntilDeadline > 7;
+      }
 
     return (
       matchesSearch &&
@@ -786,12 +1056,113 @@ export default function Dashboard() {
               <h1 className="text-2xl font-bold text-primary">MPDO Tracker</h1>
             </div>
             <div className="flex items-center gap-6">
+              {/* Notifications */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowNotificationPanel((prev) => !prev)}
+                  className="relative p-2 hover:bg-gray-100 rounded-lg transition"
+                  title="Notifications"
+                >
+                  <Bell className="w-5 h-5 text-gray-600" />
+                  {unreadNotificationCount > 0 && (
+                    <span className="absolute -top-1 -right-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white">
+                      {unreadNotificationCount}
+                    </span>
+                  )}
+                </button>
+                {showNotificationPanel && (
+                  <div className="absolute right-0 mt-2 w-96 max-h-[420px] rounded-3xl border border-slate-200 bg-white/95 shadow-2xl backdrop-blur-xl z-50">
+                    <div className="flex items-center justify-between gap-3 border-b border-slate-200/80 bg-slate-50 px-4 py-4">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">Important announcements</p>
+                        <p className="text-xs text-slate-500">
+                          {activeNotifications.length} unread notification{activeNotifications.length === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() =>
+                            setReadNotificationIds((prev) => [
+                              ...new Set([
+                                ...prev,
+                                ...activeNotifications.map((note) => note.id),
+                              ]),
+                            ])
+                          }
+                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100"
+                        >
+                          Mark all as read
+                        </button>
+                        <button
+                          onClick={() => setShowNotificationPanel(false)}
+                          className="text-slate-400 hover:text-slate-600"
+                          title="Close notifications"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2 overflow-y-auto max-h-[320px] p-3">
+                      {activeNotifications.length === 0 ? (
+                        <div className="rounded-3xl bg-slate-50 p-5 text-sm text-slate-600">
+                          No new announcements. You're all caught up.
+                        </div>
+                      ) : (
+                        activeNotifications.map((note) => (
+                          <button
+                            key={note.id}
+                            onClick={() => {
+                              setReadNotificationIds((prev) =>
+                                Array.from(new Set([...prev, note.id])),
+                              );
+                              if (note.docId) {
+                                const doc = documents.find((d) => d.id === note.docId);
+                                if (doc) setSelectedDoc(doc);
+                              }
+                              setShowNotificationPanel(false);
+                            }}
+                            className="w-full rounded-3xl border border-slate-200 bg-white p-4 text-left transition hover:border-slate-300 hover:shadow-sm"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">{note.title}</p>
+                                <p className="mt-1 text-xs text-slate-500">Unread</p>
+                              </div>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                                  note.severity === "urgent"
+                                    ? "bg-red-100 text-red-700"
+                                    : note.severity === "warning"
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-sky-100 text-sky-700"
+                                }`}
+                              >
+                                {note.severity === "urgent" ? "Urgent" : note.severity === "warning" ? "Warning" : "Info"}
+                              </span>
+                            </div>
+                            <p className="mt-3 text-sm leading-6 text-slate-600">{note.message}</p>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Account Name - showing email prefix and role */}
               <div className="text-right">
                 <p className="font-semibold text-gray-900">
-                  {user?.email?.split("@")[0]}
+                  {user?.name || user?.email?.split("@")[0]}
                 </p>
                 <p className="text-sm text-gray-500 capitalize">{user?.role}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => setShowProfileModal(true)}
+                >
+                  Edit profile
+                </Button>
               </div>
 
               {/* Admin-only employee menu */}
@@ -914,6 +1285,91 @@ export default function Dashboard() {
           </div>
         </div>
       </header>
+
+      <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Update profile</DialogTitle>
+            <DialogDescription>
+              Change your name, department, and password securely.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="profile-name">Name</Label>
+              <Input
+                id="profile-name"
+                value={profileName}
+                onChange={(event) => setProfileName(event.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="profile-email">Email</Label>
+              <Input id="profile-email" value={user?.email ?? ""} disabled />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="profile-department">Department</Label>
+              <Input
+                id="profile-department"
+                value={profileDepartment}
+                onChange={(event) => setProfileDepartment(event.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button
+              variant="secondary"
+              onClick={handleSaveProfile}
+              disabled={isProfileSaving}
+            >
+              {isProfileSaving ? "Saving..." : "Save profile"}
+            </Button>
+            <Button variant="ghost" onClick={() => setShowProfileModal(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+          <div className="mt-6 border-t border-slate-200 pt-4">
+            <p className="text-sm font-semibold text-slate-900">Change password</p>
+            <div className="grid gap-4 py-3">
+              <div className="grid gap-2">
+                <Label htmlFor="current-password">Current password</Label>
+                <Input
+                  id="current-password"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="new-password">New password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="confirm-password">Confirm new password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                onClick={handleChangePassword}
+                disabled={isPasswordChanging}
+              >
+                {isPasswordChanging ? "Updating..." : "Update password"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
@@ -1091,8 +1547,7 @@ export default function Dashboard() {
               </div>
             ) : (
               filteredDocuments.map((doc) => {
-                const statusColor =
-                  statusColors[doc.status as keyof typeof statusColors];
+                const statusColor = getStatusColor(doc.status);
                 const StatusIcon = statusColor.icon;
                 const assignedEmployee = employees.find(
                   (e) => e.email === doc.assignedTo,
@@ -1172,7 +1627,7 @@ export default function Dashboard() {
                         >
                           <SelectTrigger
                             onClick={(e) => e.stopPropagation()}
-                            className={`rounded-full border ${statusColor.border} bg-white text-left px-3 py-1.5 h-9 inline-flex items-center gap-2 w-fit min-w-[10rem]`}
+                            className={`rounded-full border ${statusColor.border} ${statusColor.bg} text-left px-3 py-1.5 h-9 inline-flex items-center gap-2 w-fit min-w-[10rem]`}
                           >
                             <StatusIcon
                               className={`w-4 h-4 ${statusColor.text}`}
@@ -1356,67 +1811,58 @@ export default function Dashboard() {
                       )}
 
                       {/* Approve button - only for documents sent for approval */}
-                      {selectedDoc.status === "Sent for approval" &&
-                        docViewMode === "view" && (
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              setIsApprovingDoc(true);
-                              try {
-                                await approveDocument(
-                                  selectedDoc.id,
-                                  user?.name || "Admin",
-                                );
-                                const updated = await getDocuments();
-                                setDocuments(updated);
-                                const refreshed = updated.find(
-                                  (d) => d.id === selectedDoc.id,
-                                );
-                                if (refreshed) setSelectedDoc(refreshed);
-                                toast.success(
-                                  "Document approved successfully.",
-                                );
-                              } catch (err: any) {
-                                console.error(
-                                  "Failed to approve document:",
-                                  err,
-                                );
-                                toast.error(
-                                  err.message || "Failed to approve document.",
-                                );
-                              } finally {
-                                setIsApprovingDoc(false);
-                              }
-                            }}
-                            disabled={isApprovingDoc}
-                            className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-100 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
-                            title={isApprovingDoc ? "Approving..." : "Approve"}
-                          >
-                            {isApprovingDoc ? (
-                              <svg
-                                className="w-5 h-5 animate-spin"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                              >
-                                <circle
-                                  className="opacity-25"
-                                  cx="12"
-                                  cy="12"
-                                  r="10"
-                                  stroke="currentColor"
-                                  strokeWidth="4"
-                                />
-                                <path
-                                  className="opacity-75"
-                                  fill="currentColor"
-                                  d="M4 12a8 8 0 018-8v8z"
-                                />
-                              </svg>
-                            ) : (
-                              <CheckCircle className="w-5 h-5" />
-                            )}
-                          </button>
-                        )}
+                      {selectedDoc.status === "Sent for approval" && docViewMode === "view" && (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setIsApprovingDoc(true);
+                            try {
+                              await approveDocument(
+                                selectedDoc.id,
+                                user?.name || "Admin",
+                                selectedDoc.status,
+                              );
+                              const updated = await getDocuments();
+                              setDocuments(updated);
+                              const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                              if (refreshed) setSelectedDoc(refreshed);
+                              toast.success("Document approved successfully.");
+                            } catch (err: any) {
+                              console.error("Failed to approve document:", err);
+                              toast.error(err.message || "Failed to approve document.");
+                            } finally {
+                              setIsApprovingDoc(false);
+                            }
+                          }}
+                          disabled={isApprovingDoc}
+                          className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-100 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={isApprovingDoc ? "Approving..." : "Approve"}
+                        >
+                          {isApprovingDoc ? (
+                            <svg
+                              className="w-5 h-5 animate-spin"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              />
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8v8z"
+                              />
+                            </svg>
+                          ) : (
+                            <CheckCircle className="w-5 h-5" />
+                          )}
+                        </button>
+                      )}
 
                       {/* Revise button - only for documents sent for approval */}
                       {selectedDoc.status === "Sent for approval" &&
@@ -1699,15 +2145,20 @@ export default function Dashboard() {
                 <p className="text-xs text-gray-500 uppercase font-semibold mb-2">
                   Status
                 </p>
-                {docViewMode === "edit" ? (
+                {docViewMode === "edit" || user?.role === "staff" ? (
                   <Select
                     value={editForm.status || ""}
                     onValueChange={(value) => {
+                      const nextStatus = value as Document["status"];
                       setEditForm({
                         ...editForm,
-                        status: value as Document["status"],
+                        status: nextStatus,
                       });
-                      if (value === "Approved") {
+                      if (user?.role === "staff") {
+                        handleDocStatusChange(selectedDoc.id, nextStatus);
+                        return;
+                      }
+                      if (nextStatus === "Approved") {
                         setShowApprovalWorkflow(true);
                       }
                     }}
@@ -2025,6 +2476,11 @@ export default function Dashboard() {
                         <p className="text-sm text-gray-500">
                           {entry.date} • By {entry.by}
                         </p>
+                        {entry.details && (
+                          <p className="text-sm text-gray-700 mt-1">
+                            {entry.details}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -2042,6 +2498,7 @@ export default function Dashboard() {
                           await sendDocumentForApproval(
                             selectedDoc.id,
                             user?.name || "Staff",
+                            selectedDoc.status,
                           );
                           const updated = await getDocuments();
                           setDocuments(updated);
@@ -2388,9 +2845,10 @@ export default function Dashboard() {
                       await updateDocument(selectedDoc.id, {
                         status: "Approved",
                       });
-                      await addAuditLog(
+                      await addStatusChangeLog(
                         selectedDoc.id,
-                        "Document Approved",
+                        selectedDoc.status,
+                        "Approved",
                         user?.name || "Admin",
                         approvalRemarks || "Approved by admin",
                       );
@@ -2447,9 +2905,10 @@ export default function Dashboard() {
                     await updateDocument(selectedDoc.id, {
                       status: "Approved",
                     });
-                    await addAuditLog(
+                    await addStatusChangeLog(
                       selectedDoc.id,
-                      "Marked as Done",
+                      selectedDoc.status,
+                      "Approved",
                       user?.name || "Staff",
                       `Returned to ${selectedDoc.source}`,
                     );
@@ -2770,6 +3229,7 @@ export default function Dashboard() {
                         selectedDoc.id,
                         revisionComments,
                         user?.name || "Admin",
+                        selectedDoc.status,
                       );
                       const updated = await getDocuments();
                       setDocuments(updated);
