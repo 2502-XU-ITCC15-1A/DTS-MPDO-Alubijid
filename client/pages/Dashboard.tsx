@@ -64,6 +64,7 @@ import {
   Trash2,
   X,
   Camera,
+  User,
 } from "lucide-react";
 
 const statusColors = {
@@ -71,48 +72,56 @@ const statusColors = {
     bg: "bg-yellow-50",
     border: "border-yellow-200",
     text: "text-yellow-700",
+    accent: "#eab308",
     icon: AlertCircle,
   },
   Processing: {
     bg: "bg-blue-50",
     border: "border-blue-200",
     text: "text-blue-700",
+    accent: "#3b82f6",
     icon: HourglassIcon,
   },
   "Needs revision": {
     bg: "bg-orange-50",
     border: "border-orange-200",
     text: "text-orange-700",
+    accent: "#f97316",
     icon: AlertCircle,
   },
   Approved: {
     bg: "bg-green-50",
     border: "border-green-200",
     text: "text-green-700",
+    accent: "#10b981",
     icon: CheckCircle,
   },
   Released: {
     bg: "bg-green-50",
     border: "border-green-200",
     text: "text-green-700",
+    accent: "#10b981",
     icon: CheckCircle,
   },
   Overdue: {
     bg: "bg-red-50",
     border: "border-red-200",
     text: "text-red-700",
+    accent: "#ef4444",
     icon: AlertCircle,
   },
   "Sent for approval": {
     bg: "bg-purple-100",
     border: "border-purple-200",
     text: "text-purple-600",
+    accent: "#9333ea",
     icon: HourglassIcon,
   },
   Completed: {
     bg: "bg-green-50",
     border: "border-green-200",
     text: "text-green-700",
+    accent: "#10b981",
     icon: CheckCircle,
   },
 };
@@ -1221,6 +1230,8 @@ export default function Dashboard() {
                 </Button>
               </div>
 
+              {/* Account Name - showing email prefix and role */}
+
               {/* Admin-only employee menu */}
               {user?.role === "admin" && (
                 <div className="relative">
@@ -1329,14 +1340,6 @@ export default function Dashboard() {
               >
                 <ScanLine className="w-5 h-5 text-primary" />
               </button>
-
-              <button
-                onClick={handleLogout}
-                className="p-2 hover:bg-gray-100 rounded-lg transition"
-                title="Logout"
-              >
-                <LogOut className="w-5 h-5 text-gray-600" />
-              </button>
             </div>
           </div>
         </div>
@@ -1385,7 +1388,9 @@ export default function Dashboard() {
             </Button>
           </DialogFooter>
           <div className="mt-6 border-t border-slate-200 pt-4">
-            <p className="text-sm font-semibold text-slate-900">Change password</p>
+            <p className="text-sm font-semibold text-slate-900">
+              Change password
+            </p>
             <div className="grid gap-4 py-3">
               <div className="grid gap-2">
                 <Label htmlFor="current-password">Current password</Label>
@@ -1430,6 +1435,41 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* User Profile Section */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                <User className="w-6 h-6 text-gray-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {user?.name || user?.email?.split("@")[0]}
+                </h2>
+                <p className="text-sm text-gray-500 capitalize">{user?.role}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowProfileModal(true)}
+                className="flex items-center gap-2"
+              >
+                <Edit className="w-4 h-4" />
+                Edit Profile
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleLogout}
+                className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </Button>
+            </div>
+          </div>
+        </div>
+
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           {statusCards.map((card) => {
@@ -1614,13 +1654,7 @@ export default function Dashboard() {
                     key={doc.id}
                     className="p-6 hover:bg-gray-50 transition cursor-pointer border-l-4"
                     style={{
-                      borderLeftColor:
-                        doc.status === "Overdue"
-                          ? "#ef4444"
-                          : doc.status === "Approved" ||
-                              doc.status === "Released"
-                            ? "#10b981"
-                            : "#3b82f6",
+                      borderLeftColor: statusColor.accent,
                     }}
                     onClick={() => {
                       setSelectedDoc(doc);
@@ -3218,13 +3252,17 @@ export default function Dashboard() {
                 assignedToName,
               );
 
-              // Upload attached file to Google Drive under the new document
-              if (wizardData.file) {
-                try {
-                  await uploadFile(dtn, wizardData.file, user?.name || "Admin");
-                } catch (uploadErr) {
-                  console.error("File upload failed:", uploadErr);
-                }
+              // Upload attached files to Google Drive under the new document
+              if (wizardData.files?.length > 0) {
+                await Promise.all(
+                  wizardData.files.map(async (file) => {
+                    try {
+                      await uploadFile(dtn, file, user?.name || "Admin");
+                    } catch (uploadErr) {
+                      console.error("File upload failed:", uploadErr);
+                    }
+                  }),
+                );
               }
 
               const updated = await getDocuments();

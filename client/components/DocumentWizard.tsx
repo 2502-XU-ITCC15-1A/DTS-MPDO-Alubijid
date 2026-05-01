@@ -23,7 +23,7 @@ interface DocumentWizardProps {
     documentDirection: "Incoming" | "Outgoing";
     routingActions: RoutingAction[];
     routingRemarks: string;
-    file: File | null;
+    files: File[];
   }) => void;
 }
 
@@ -70,7 +70,7 @@ export default function DocumentWizard({
   );
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [customDocumentTypes, setCustomDocumentTypes] = useState<string[]>([]);
   const [customSources, setCustomSources] = useState<string[]>([]);
   const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
@@ -155,7 +155,7 @@ export default function DocumentWizard({
       documentDirection: formData.documentDirection,
       routingActions: selectedRoutingActions,
       routingRemarks,
-      file: selectedFile, // ← add this
+      files: selectedFiles,
     });
   };
 
@@ -418,7 +418,10 @@ export default function DocumentWizard({
                   type="file"
                   className="hidden"
                   accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-                  onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                  multiple
+                  onChange={(e) =>
+                    setSelectedFiles(Array.from(e.target.files ?? []))
+                  }
                 />
 
                 {/* Drop Zone */}
@@ -427,10 +430,20 @@ export default function DocumentWizard({
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                  {selectedFile ? (
-                    <p className="text-sm text-primary font-medium">
-                      {selectedFile.name}
-                    </p>
+                  {selectedFiles.length > 0 ? (
+                    <div>
+                      <p className="text-sm text-primary font-medium">
+                        {selectedFiles.length} file
+                        {selectedFiles.length > 1 ? "s" : ""} selected
+                      </p>
+                      <div className="mt-2 text-left text-xs text-gray-500 space-y-1">
+                        {selectedFiles.map((file) => (
+                          <p key={file.name} className="truncate">
+                            {file.name}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
                   ) : (
                     <p className="text-sm text-gray-600">
                       Drag and drop or{" "}
@@ -441,21 +454,34 @@ export default function DocumentWizard({
                   )}
                 </div>
 
-                {/* Clear selection */}
-                {selectedFile && (
+                {/* Upload / Clear selection */}
+                <div className="mt-3 flex flex-wrap gap-2">
                   <Button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelectedFile(null);
+                      fileInputRef.current?.click();
                     }}
-                    variant="destructive"
                     size="sm"
-                    className="mt-2 flex items-center gap-1"
+                    className="flex items-center gap-2"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Remove file
+                    <Upload className="w-3.5 h-3.5" />
+                    Upload files
                   </Button>
-                )}
+                  {selectedFiles.length > 0 && (
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedFiles([]);
+                      }}
+                      variant="destructive"
+                      size="sm"
+                      className="flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Remove file{selectedFiles.length > 1 ? "s" : ""}
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -584,7 +610,7 @@ export default function DocumentWizard({
                 </div>
                 <div className="border-b pb-3">
                   <p className="text-xs text-gray-500 uppercase font-semibold">
-                    Direction
+                    Document Direction
                   </p>
                   <p className="text-sm font-medium text-gray-900 mt-1">
                     {formData.documentDirection || "—"}
@@ -600,6 +626,22 @@ export default function DocumentWizard({
                 </div>
                 <div className="border-b pb-3">
                   <p className="text-xs text-gray-500 uppercase font-semibold">
+                    Attachments
+                  </p>
+                  <div className="mt-1 text-sm text-gray-900 space-y-1">
+                    {selectedFiles.length > 0 ? (
+                      selectedFiles.map((file) => (
+                        <p key={file.name} className="truncate">
+                          {file.name}
+                        </p>
+                      ))
+                    ) : (
+                      <p className="text-gray-500">No attachments selected</p>
+                    )}
+                  </div>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-xs text-gray-500 uppercase font-semibold">
                     Assigned To
                   </p>
                   <p className="text-sm font-medium text-gray-900 mt-1">
@@ -608,7 +650,7 @@ export default function DocumentWizard({
                   </p>
                 </div>
                 {selectedRoutingActions.length > 0 && (
-                  <div>
+                  <div className="border-b pb-3">
                     <p className="text-xs text-gray-500 uppercase font-semibold">
                       Routing Actions
                     </p>
@@ -625,6 +667,14 @@ export default function DocumentWizard({
                     </div>
                   </div>
                 )}
+                <div>
+                  <p className="text-xs text-gray-500 uppercase font-semibold">
+                    Remarks - Instructions
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {routingRemarks || "—"}
+                  </p>
+                </div>
               </div>
             </div>
           )}
