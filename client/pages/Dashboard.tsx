@@ -203,6 +203,8 @@ type DashboardNotification = {
   message: string;
   severity: "info" | "warning" | "urgent";
   docId?: string;
+  sender?: string;
+  time?: string;
   read?: boolean;
 };
 
@@ -533,6 +535,9 @@ export default function Dashboard() {
           const revisionReason = doc.revisionComments
             ? " Reason: " + doc.revisionComments
             : "";
+          const revisionEntry = doc.history
+            .filter((entry) => entry.action === "Revision requested")
+            .pop();
 
           notifications.push({
             id: `${doc.id}-revision`,
@@ -543,6 +548,9 @@ export default function Dashboard() {
               revisionReason,
             severity: "urgent",
             docId: doc.id,
+            sender: revisionEntry?.by || "Admin",
+            time:
+              revisionEntry?.date || doc.updatedAt || doc.createdAt || "",
           });
           return;
         }
@@ -580,25 +588,26 @@ export default function Dashboard() {
     }
 
     if (user.role === "admin") {
-      const pending = docs.filter((doc) => doc.status === "Sent for approval");
-      if (pending.length > 0) {
-        const approvalPlural = pending.length === 1 ? "" : "s";
-        const approvalVerb = pending.length === 1 ? "is" : "are";
+      docs
+        .filter((doc) => doc.status === "Sent for approval")
+        .forEach((doc) => {
+          const approvalEntry = doc.history
+            .filter((entry) => entry.action === "Sent for Admin Approval")
+            .pop();
 
-        notifications.push({
-          id: "admin-approval",
-          title: "Documents need approval",
-          message:
-            "There " +
-            approvalVerb +
-            " " +
-            pending.length +
-            " document" +
-            approvalPlural +
-            " waiting for admin approval.",
-          severity: "urgent",
+          notifications.push({
+            id: `${doc.id}-approval`,
+            title: "Document sent for approval",
+            message:
+              (doc.title || doc.id) +
+              " was submitted for admin approval.",
+            severity: "urgent",
+            docId: doc.id,
+            sender: approvalEntry?.by || doc.assignedTo || "Staff",
+            time:
+              approvalEntry?.date || doc.updatedAt || doc.createdAt || "",
+          });
         });
-      }
     }
 
     return notifications;
@@ -1188,6 +1197,12 @@ export default function Dashboard() {
                                 <p className="mt-1 text-xs text-slate-500">
                                   Unread
                                 </p>
+                                {(note.sender || note.time) && (
+                                  <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-slate-500">
+                                    {note.sender && <span>From: {note.sender}</span>}
+                                    {note.time && <span>{note.time}</span>}
+                                  </div>
+                                )}
                               </div>
                               <span
                                 className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
