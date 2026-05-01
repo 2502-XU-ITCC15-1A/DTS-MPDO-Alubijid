@@ -71,48 +71,56 @@ const statusColors = {
     bg: "bg-yellow-50",
     border: "border-yellow-200",
     text: "text-yellow-700",
+    accent: "#eab308",
     icon: AlertCircle,
   },
   Processing: {
     bg: "bg-blue-50",
     border: "border-blue-200",
     text: "text-blue-700",
+    accent: "#3b82f6",
     icon: HourglassIcon,
   },
   "Needs revision": {
     bg: "bg-orange-50",
     border: "border-orange-200",
     text: "text-orange-700",
+    accent: "#f97316",
     icon: AlertCircle,
   },
   Approved: {
     bg: "bg-green-50",
     border: "border-green-200",
     text: "text-green-700",
+    accent: "#10b981",
     icon: CheckCircle,
   },
   Released: {
     bg: "bg-green-50",
     border: "border-green-200",
     text: "text-green-700",
+    accent: "#10b981",
     icon: CheckCircle,
   },
   Overdue: {
     bg: "bg-red-50",
     border: "border-red-200",
     text: "text-red-700",
+    accent: "#ef4444",
     icon: AlertCircle,
   },
   "Sent for approval": {
     bg: "bg-purple-100",
     border: "border-purple-200",
     text: "text-purple-600",
+    accent: "#9333ea",
     icon: HourglassIcon,
   },
   Completed: {
     bg: "bg-green-50",
     border: "border-green-200",
     text: "text-green-700",
+    accent: "#10b981",
     icon: CheckCircle,
   },
 };
@@ -1640,13 +1648,7 @@ export default function Dashboard() {
                     key={doc.id}
                     className="p-6 hover:bg-gray-50 transition cursor-pointer border-l-4"
                     style={{
-                      borderLeftColor:
-                        doc.status === "Overdue"
-                          ? "#ef4444"
-                          : doc.status === "Approved" ||
-                              doc.status === "Released"
-                            ? "#10b981"
-                            : "#3b82f6",
+                      borderLeftColor: statusColor.accent,
                     }}
                     onClick={() => {
                       setSelectedDoc(doc);
