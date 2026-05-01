@@ -64,6 +64,7 @@ import {
   Trash2,
   X,
   Camera,
+  User,
 } from "lucide-react";
 
 const statusColors = {
@@ -211,8 +212,6 @@ type DashboardNotification = {
   message: string;
   severity: "info" | "warning" | "urgent";
   docId?: string;
-  sender?: string;
-  time?: string;
   read?: boolean;
 };
 
@@ -353,7 +352,6 @@ export default function Dashboard() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [profileDepartment, setProfileDepartment] = useState("");
-  const [profilePersonalEmail, setProfilePersonalEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -437,17 +435,12 @@ export default function Dashboard() {
     if (!user) return;
     setProfileName(user.name || "");
     setProfileDepartment(user.department || "");
-    setProfilePersonalEmail(user.personal_email || "");
   }, [user]);
 
   const handleSaveProfile = async () => {
     if (!user) return;
     if (!profileName.trim()) {
       toast.error("Name cannot be empty.");
-      return;
-    }
-    if (profilePersonalEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profilePersonalEmail)) {
-      toast.error("Please enter a valid personal email address.");
       return;
     }
 
@@ -543,9 +536,6 @@ export default function Dashboard() {
           const revisionReason = doc.revisionComments
             ? " Reason: " + doc.revisionComments
             : "";
-          const revisionEntry = doc.history
-            .filter((entry) => entry.action === "Revision requested")
-            .pop();
 
           notifications.push({
             id: `${doc.id}-revision`,
@@ -556,9 +546,6 @@ export default function Dashboard() {
               revisionReason,
             severity: "urgent",
             docId: doc.id,
-            sender: revisionEntry?.by || "Admin",
-            time:
-              revisionEntry?.date || doc.updatedAt || doc.createdAt || "",
           });
           return;
         }
@@ -596,26 +583,25 @@ export default function Dashboard() {
     }
 
     if (user.role === "admin") {
-      docs
-        .filter((doc) => doc.status === "Sent for approval")
-        .forEach((doc) => {
-          const approvalEntry = doc.history
-            .filter((entry) => entry.action === "Sent for Admin Approval")
-            .pop();
+      const pending = docs.filter((doc) => doc.status === "Sent for approval");
+      if (pending.length > 0) {
+        const approvalPlural = pending.length === 1 ? "" : "s";
+        const approvalVerb = pending.length === 1 ? "is" : "are";
 
-          notifications.push({
-            id: `${doc.id}-approval`,
-            title: "Document sent for approval",
-            message:
-              (doc.title || doc.id) +
-              " was submitted for admin approval.",
-            severity: "urgent",
-            docId: doc.id,
-            sender: approvalEntry?.by || doc.assignedTo || "Staff",
-            time:
-              approvalEntry?.date || doc.updatedAt || doc.createdAt || "",
-          });
+        notifications.push({
+          id: "admin-approval",
+          title: "Documents need approval",
+          message:
+            "There " +
+            approvalVerb +
+            " " +
+            pending.length +
+            " document" +
+            approvalPlural +
+            " waiting for admin approval.",
+          severity: "urgent",
         });
+      }
     }
 
     return notifications;
@@ -916,28 +902,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleApproveSelectedDoc = async () => {
-    if (!selectedDoc || isApprovingDoc) return;
-    setIsApprovingDoc(true);
-    try {
-      await approveDocument(
-        selectedDoc.id,
-        user?.name || "Admin",
-        selectedDoc.status,
-      );
-      const updated = await getDocuments();
-      setDocuments(updated);
-      const refreshed = updated.find((d) => d.id === selectedDoc.id);
-      if (refreshed) setSelectedDoc(refreshed);
-      toast.success("Document approved successfully.");
-    } catch (err: any) {
-      console.error("Failed to approve document:", err);
-      toast.error(err.message || "Failed to approve document.");
-    } finally {
-      setIsApprovingDoc(false);
-    }
-  };
-
   const handleAddCustomDocumentType = () => {
     if (
       newDocumentTypeName.trim() &&
@@ -1205,12 +1169,6 @@ export default function Dashboard() {
                                 <p className="mt-1 text-xs text-slate-500">
                                   Unread
                                 </p>
-                                {(note.sender || note.time) && (
-                                  <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-slate-500">
-                                    {note.sender && <span>From: {note.sender}</span>}
-                                    {note.time && <span>{note.time}</span>}
-                                  </div>
-                                )}
                               </div>
                               <span
                                 className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
@@ -1240,20 +1198,6 @@ export default function Dashboard() {
               </div>
 
               {/* Account Name - showing email prefix and role */}
-              <div className="text-right">
-                <p className="font-semibold text-gray-900">
-                  {user?.name || user?.email?.split("@")[0]}
-                </p>
-                <p className="text-sm text-gray-500 capitalize">{user?.role}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2"
-                  onClick={() => setShowProfileModal(true)}
-                >
-                  Edit profile
-                </Button>
-              </div>
 
               {/* Admin-only employee menu */}
               {user?.role === "admin" && (
@@ -1363,14 +1307,6 @@ export default function Dashboard() {
               >
                 <ScanLine className="w-5 h-5 text-primary" />
               </button>
-
-              <button
-                onClick={handleLogout}
-                className="p-2 hover:bg-gray-100 rounded-lg transition"
-                title="Logout"
-              >
-                <LogOut className="w-5 h-5 text-gray-600" />
-              </button>
             </div>
           </div>
         </div>
@@ -1419,7 +1355,9 @@ export default function Dashboard() {
             </Button>
           </DialogFooter>
           <div className="mt-6 border-t border-slate-200 pt-4">
-            <p className="text-sm font-semibold text-slate-900">Change password</p>
+            <p className="text-sm font-semibold text-slate-900">
+              Change password
+            </p>
             <div className="grid gap-4 py-3">
               <div className="grid gap-2">
                 <Label htmlFor="current-password">Current password</Label>
@@ -1451,7 +1389,6 @@ export default function Dashboard() {
             </div>
             <div className="flex justify-end">
               <Button
-                className="w-full rounded-xl"
                 onClick={handleChangePassword}
                 disabled={isPasswordChanging}
               >
@@ -1464,6 +1401,41 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* User Profile Section */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                <User className="w-6 h-6 text-gray-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {user?.name || user?.email?.split("@")[0]}
+                </h2>
+                <p className="text-sm text-gray-500 capitalize">{user?.role}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowProfileModal(true)}
+                className="flex items-center gap-2"
+              >
+                <Edit className="w-4 h-4" />
+                Edit Profile
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleLogout}
+                className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </Button>
+            </div>
+          </div>
+        </div>
+
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           {statusCards.map((card) => {
@@ -1895,6 +1867,85 @@ export default function Dashboard() {
                         </button>
                       )}
 
+                      {/* Approve button - only for documents sent for approval */}
+                      {selectedDoc.status === "Sent for approval" &&
+                        docViewMode === "view" && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              setIsApprovingDoc(true);
+                              try {
+                                await approveDocument(
+                                  selectedDoc.id,
+                                  user?.name || "Admin",
+                                  selectedDoc.status,
+                                );
+                                const updated = await getDocuments();
+                                setDocuments(updated);
+                                const refreshed = updated.find(
+                                  (d) => d.id === selectedDoc.id,
+                                );
+                                if (refreshed) setSelectedDoc(refreshed);
+                                toast.success(
+                                  "Document approved successfully.",
+                                );
+                              } catch (err: any) {
+                                console.error(
+                                  "Failed to approve document:",
+                                  err,
+                                );
+                                toast.error(
+                                  err.message || "Failed to approve document.",
+                                );
+                              } finally {
+                                setIsApprovingDoc(false);
+                              }
+                            }}
+                            disabled={isApprovingDoc}
+                            className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-100 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={isApprovingDoc ? "Approving..." : "Approve"}
+                          >
+                            {isApprovingDoc ? (
+                              <svg
+                                className="w-5 h-5 animate-spin"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                              >
+                                <circle
+                                  className="opacity-25"
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                />
+                                <path
+                                  className="opacity-75"
+                                  fill="currentColor"
+                                  d="M4 12a8 8 0 018-8v8z"
+                                />
+                              </svg>
+                            ) : (
+                              <CheckCircle className="w-5 h-5" />
+                            )}
+                          </button>
+                        )}
+
+                      {/* Revise button - only for documents sent for approval */}
+                      {selectedDoc.status === "Sent for approval" &&
+                        docViewMode === "view" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowRevisionModal(true);
+                            }}
+                            className="p-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-100 rounded transition"
+                            title="Revise"
+                          >
+                            <Edit className="w-5 h-5" />
+                          </button>
+                        )}
+
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -2161,139 +2212,86 @@ export default function Dashboard() {
                 <p className="text-xs text-gray-500 uppercase font-semibold mb-2">
                   Status
                 </p>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 min-w-0">
-                    {docViewMode === "edit" || user?.role === "staff" ? (
-                      <Select
-                        value={editForm.status || ""}
-                        onValueChange={(value) => {
-                          const nextStatus = value as Document["status"];
-                          setEditForm({
-                            ...editForm,
-                            status: nextStatus,
-                          });
-                          if (user?.role === "staff") {
-                            handleDocStatusChange(selectedDoc.id, nextStatus);
-                            return;
-                          }
-                          if (nextStatus === "Approved") {
-                            setShowApprovalWorkflow(true);
-                          }
-                        }}
-                      >
-                        <SelectTrigger>
-                          {editForm.status ? (
-                            <div className="flex items-center gap-2">
-                              {(() => {
-                                const selectedStatus = getStatusDetails(
-                                  editForm.status,
-                                );
-                                const SelectedIcon = selectedStatus.icon;
-                                return (
-                                  <>
-                                    <SelectedIcon
-                                      className={`w-4 h-4 ${selectedStatus.text}`}
-                                    />
-                                    <span
-                                      className={`text-sm font-medium ${selectedStatus.text}`}
-                                    >
-                                      {selectedStatus.label}
-                                    </span>
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          ) : (
-                            <span className="text-sm text-gray-500">
-                              Select status
-                            </span>
-                          )}
-                        </SelectTrigger>
-                        <SelectContent>
-                          {statusOptions.map((option) => {
-                            const OptionIcon = option.icon;
-                            return (
-                              <SelectItem key={option.value} value={option.value}>
-                                <div className="flex items-center gap-2">
-                                  <OptionIcon
-                                    className={`w-4 h-4 ${option.text}`}
-                                  />
-                                  <span>{option.label}</span>
-                                </div>
-                              </SelectItem>
+                {docViewMode === "edit" || user?.role === "staff" ? (
+                  <Select
+                    value={editForm.status || ""}
+                    onValueChange={(value) => {
+                      const nextStatus = value as Document["status"];
+                      setEditForm({
+                        ...editForm,
+                        status: nextStatus,
+                      });
+                      if (user?.role === "staff") {
+                        handleDocStatusChange(selectedDoc.id, nextStatus);
+                        return;
+                      }
+                      if (nextStatus === "Approved") {
+                        setShowApprovalWorkflow(true);
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      {editForm.status ? (
+                        <div className="flex items-center gap-2">
+                          {(() => {
+                            const selectedStatus = getStatusDetails(
+                              editForm.status,
                             );
-                          })}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg w-full">
-                        {(() => {
-                          const details = getStatusDetails(selectedDoc.status);
-                          const StatusIcon = details.icon;
-                          return (
-                            <>
-                              <StatusIcon className={`w-4 h-4 ${details.text}`} />
-                              <span
-                                className={`text-lg font-medium ${details.text}`}
-                              >
-                                {details.label}
-                              </span>
-                            </>
-                          );
-                        })()}
-                      </div>
-                    )}
+                            const SelectedIcon = selectedStatus.icon;
+                            return (
+                              <>
+                                <SelectedIcon
+                                  className={`w-4 h-4 ${selectedStatus.text}`}
+                                />
+                                <span
+                                  className={`text-sm font-medium ${selectedStatus.text}`}
+                                >
+                                  {selectedStatus.label}
+                                </span>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-500">
+                          Select status
+                        </span>
+                      )}
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statusOptions.map((option) => {
+                        const OptionIcon = option.icon;
+                        return (
+                          <SelectItem key={option.value} value={option.value}>
+                            <div className="flex items-center gap-2">
+                              <OptionIcon
+                                className={`w-4 h-4 ${option.text}`}
+                              />
+                              <span>{option.label}</span>
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg w-full">
+                    {(() => {
+                      const details = getStatusDetails(selectedDoc.status);
+                      const StatusIcon = details.icon;
+                      return (
+                        <>
+                          <StatusIcon className={`w-4 h-4 ${details.text}`} />
+                          <span
+                            className={`text-lg font-medium ${details.text}`}
+                          >
+                            {details.label}
+                          </span>
+                        </>
+                      );
+                    })()}
                   </div>
-                  {user?.role === "admin" &&
-                    selectedDoc.status === "Sent for approval" &&
-                    (
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleApproveSelectedDoc();
-                          }}
-                          disabled={isApprovingDoc}
-                          className="p-2 bg-green-100 hover:bg-green-200 text-green-700 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
-                          title={isApprovingDoc ? "Approving..." : "Approve"}
-                        >
-                          {isApprovingDoc ? (
-                            <svg
-                              className="w-5 h-5 animate-spin"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                            >
-                              <circle
-                                className="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                strokeWidth="4"
-                              />
-                              <path
-                                className="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8v8z"
-                              />
-                            </svg>
-                          ) : (
-                            <CheckCircle className="w-5 h-5" />
-                          )}
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowRevisionModal(true);
-                          }}
-                          className="p-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-700 rounded transition"
-                          title="Revise"
-                        >
-                          <Edit className="w-5 h-5" />
-                        </button>
-                      </div>
-                    )}
-                </div>
+                )}
               </div>
 
               {/* File Upload Section */}
