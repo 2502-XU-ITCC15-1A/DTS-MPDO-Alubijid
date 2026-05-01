@@ -257,7 +257,7 @@ export default function Dashboard() {
   const [uploadFormData, setUploadFormData] = useState({
     title: "",
     documentType: "",
-    source: "",
+    source: "", 
     assignedTo: "",
     deadline: "",
   });
@@ -1279,16 +1279,6 @@ export default function Dashboard() {
                 )}
               </div>
 
-              {/* Account Name - showing email prefix and role */}
-              <div className="text-right">
-                <p className="font-semibold text-gray-900">
-                  {user?.name || user?.email?.split("@")[0]}
-                </p>
-                <p className="text-sm text-gray-500 capitalize">{user?.role}</p>
-              </div>
-
-              {/* Account Name - showing email prefix and role */}
-
               {/* Admin-only employee menu */}
               {user?.role === "admin" && (
                 <div className="relative">
@@ -1427,6 +1417,14 @@ export default function Dashboard() {
               >
                 <ScanLine className="w-5 h-5 text-primary" />
               </button>
+
+              {/* Account Name */}
+              <div className="text-right border-l border-gray-200 pl-4">
+                <p className="font-semibold text-gray-900 text-sm">
+                  {user?.name || user?.email?.split("@")[0]}
+                </p>
+                <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
+              </div>
             </div>
           </div>
         </div>
