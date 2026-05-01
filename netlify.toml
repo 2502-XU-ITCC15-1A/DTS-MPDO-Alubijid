@@ -6,7 +6,6 @@
 [functions]
   external_node_modules = ["express", "busboy", "googleapis"]
   node_bundler = "esbuild"
-  timeout = 26
 
 # Proxy /api/* to the Netlify serverless function
 [[redirects]]
