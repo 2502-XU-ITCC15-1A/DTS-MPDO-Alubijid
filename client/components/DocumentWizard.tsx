@@ -643,9 +643,6 @@ export default function DocumentWizard({
             </Button>
           )}
           <div className="flex-1" />
-          <Button onClick={onClose} variant="outline">
-            Cancel
-          </Button>
           {currentStep < 3 ? (
             <Button
               onClick={handleNext}
