@@ -3190,13 +3190,17 @@ export default function Dashboard() {
                 assignedToName,
               );
 
-              // Upload attached file to Google Drive under the new document
-              if (wizardData.file) {
-                try {
-                  await uploadFile(dtn, wizardData.file, user?.name || "Admin");
-                } catch (uploadErr) {
-                  console.error("File upload failed:", uploadErr);
-                }
+              // Upload attached files to Google Drive under the new document
+              if (wizardData.files?.length > 0) {
+                await Promise.all(
+                  wizardData.files.map(async (file) => {
+                    try {
+                      await uploadFile(dtn, file, user?.name || "Admin");
+                    } catch (uploadErr) {
+                      console.error("File upload failed:", uploadErr);
+                    }
+                  }),
+                );
               }
 
               const updated = await getDocuments();
