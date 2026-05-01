@@ -4,8 +4,19 @@ import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 import { Html5Qrcode } from "html5-qrcode";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
 import DocumentWizard from "@/components/DocumentWizard";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -28,6 +39,8 @@ import {
   sendDocumentForApproval,
   approveDocument,
   reviseDocument,
+  updateEmployeeProfile,
+  changeUserPassword,
   locations,
   routingActionOptions,
 } from "@/lib/data";
@@ -46,6 +59,7 @@ import {
   ScanLine,
   Plus,
   Menu,
+  Bell,
   Edit,
   Trash2,
   X,
@@ -64,6 +78,12 @@ const statusColors = {
     border: "border-blue-200",
     text: "text-blue-700",
     icon: HourglassIcon,
+  },
+  "Needs revision": {
+    bg: "bg-orange-50",
+    border: "border-orange-200",
+    text: "text-orange-700",
+    icon: AlertCircle,
   },
   Approved: {
     bg: "bg-green-50",
@@ -84,9 +104,9 @@ const statusColors = {
     icon: AlertCircle,
   },
   "Sent for approval": {
-    bg: "bg-purple-50",
+    bg: "bg-purple-100",
     border: "border-purple-200",
-    text: "text-purple-700",
+    text: "text-purple-600",
     icon: HourglassIcon,
   },
   Completed: {
@@ -111,12 +131,6 @@ const statusOptions = [
     text: "text-blue-700",
   },
   {
-    value: "Approved",
-    label: "Completed",
-    icon: CheckCircle,
-    text: "text-green-700",
-  },
-  {
     value: "Overdue",
     label: "Overdue",
     icon: AlertCircle,
@@ -126,7 +140,19 @@ const statusOptions = [
     value: "Sent for approval",
     label: "Sent for Approval",
     icon: HourglassIcon,
-    text: "text-purple-700",
+    text: "text-purple-600",
+  },
+  {
+    value: "Needs revision",
+    label: "Needs Revision",
+    icon: AlertCircle,
+    text: "text-orange-700",
+  },
+  {
+    value: "Approved",
+    label: "Approved",
+    icon: CheckCircle,
+    text: "text-green-700",
   },
   {
     value: "Completed",
@@ -137,20 +163,30 @@ const statusOptions = [
 ] as const;
 
 const getStatusDetails = (status: string) => {
-  if (
-    status === "Approved" ||
-    status === "Released" ||
-    status === "Completed"
-  ) {
-    return statusOptions[2];
-  }
+  const resolvedStatus = status === "Released" ? "Approved" : status;
   return (
-    statusOptions.find((option) => option.value === status) ?? statusOptions[0]
+    statusOptions.find((option) => option.value === resolvedStatus) ??
+    statusOptions[0]
   );
+};
+
+const getStatusColor = (status: string) =>
+  statusColors[status as keyof typeof statusColors] ?? statusColors.Pending;
+
+const parseStoredList = (key: string) => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    localStorage.removeItem(key);
+    return [];
+  }
 };
 
 const getStatusValue = (status: Document["status"]) =>
   status === "Released" ? "Approved" : status;
+
+type StatusFilter = Document["status"] | "approved-completed" | "all";
 
 const documentTypeFilters: DocumentType[] = [
   "Received",
@@ -160,6 +196,15 @@ const documentTypeFilters: DocumentType[] = [
   "Approved",
   "Released",
 ];
+
+type DashboardNotification = {
+  id: string;
+  title: string;
+  message: string;
+  severity: "info" | "warning" | "urgent";
+  docId?: string;
+  read?: boolean;
+};
 
 const designationOptionsByUnit: Record<string, string[]> = {
   MPDC: ["Municipal Planning and Development Coordinator"],
@@ -177,7 +222,7 @@ const designationOptionsByUnit: Record<string, string[]> = {
 };
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUserProfile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [activeTab, setActiveTab] = useState<"all" | "incoming" | "outgoing">(
@@ -217,6 +262,8 @@ export default function Dashboard() {
   const [approvalRemarks, setApprovalRemarks] = useState("");
   const [filterAssignedTo, setFilterAssignedTo] = useState<string>("all");
   const [filterDeadline, setFilterDeadline] = useState<string>("all");
+  const [selectedStatusFilter, setSelectedStatusFilter] =
+    useState<StatusFilter>("all");
   const [openMenuDocId, setOpenMenuDocId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
@@ -285,17 +332,38 @@ export default function Dashboard() {
     designation: designationOptionsByUnit.MPDC[0],
   });
   const [customDocumentTypes, setCustomDocumentTypes] = useState<string[]>(() =>
-    JSON.parse(localStorage.getItem("customDocumentTypes") || "[]"),
+    parseStoredList("customDocumentTypes"),
   );
   const [customSources, setCustomSources] = useState<string[]>(() =>
-    JSON.parse(localStorage.getItem("customSources") || "[]"),
+    parseStoredList("customSources"),
   );
   const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
   const [newSourceName, setNewSourceName] = useState("");
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [revisionComments, setRevisionComments] = useState("");
+  const [showRevisionPanel, setShowRevisionPanel] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [profileDepartment, setProfileDepartment] = useState("");
+  const [profilePersonalEmail, setProfilePersonalEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isProfileSaving, setIsProfileSaving] = useState(false);
+  const [isPasswordChanging, setIsPasswordChanging] = useState(false);
+  const [notifications, setNotifications] = useState<DashboardNotification[]>(
+    [],
+  );
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
+  const notificationSeenRef = useRef(false);
   const [isApprovingDoc, setIsApprovingDoc] = useState(false);
   const [isRevisingDoc, setIsRevisingDoc] = useState(false);
+
+  const activeNotifications = notifications.filter(
+    (n) => !readNotificationIds.includes(n.id),
+  );
+  const unreadNotificationCount = activeNotifications.length;
 
   // Load employees and documents from Supabase on mount
   useEffect(() => {
@@ -327,15 +395,244 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
 
     // Load custom document types and sources from localStorage
-    const savedCustomTypes = localStorage.getItem("customDocumentTypes");
-    const savedCustomSources = localStorage.getItem("customSources");
-    if (savedCustomTypes) {
-      setCustomDocumentTypes(JSON.parse(savedCustomTypes));
-    }
-    if (savedCustomSources) {
-      setCustomSources(JSON.parse(savedCustomSources));
-    }
+    setCustomDocumentTypes(parseStoredList("customDocumentTypes"));
+    setCustomSources(parseStoredList("customSources"));
   }, []);
+
+  useEffect(() => {
+    if (!user?.email) {
+      setReadNotificationIds([]);
+      return;
+    }
+
+    const key = `readNotifications:${user.email}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as string[];
+        setReadNotificationIds(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        setReadNotificationIds([]);
+      }
+    } else {
+      setReadNotificationIds([]);
+    }
+  }, [user?.email]);
+
+  useEffect(() => {
+    if (!user?.email) return;
+    const key = `readNotifications:${user.email}`;
+    localStorage.setItem(key, JSON.stringify(readNotificationIds));
+  }, [readNotificationIds, user?.email]);
+
+  useEffect(() => {
+    if (!user) return;
+    setProfileName(user.name || "");
+    setProfileDepartment(user.department || "");
+    setProfilePersonalEmail(user.personal_email || "");
+  }, [user]);
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    if (!profileName.trim()) {
+      toast.error("Name cannot be empty.");
+      return;
+    }
+    if (profilePersonalEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profilePersonalEmail)) {
+      toast.error("Please enter a valid personal email address.");
+      return;
+    }
+
+    setIsProfileSaving(true);
+    try {
+      await updateEmployeeProfile(
+        user.id,
+        profileName.trim(),
+        profileDepartment.trim() || null,
+      );
+      await refreshUserProfile();
+      toast.success("Profile updated successfully.");
+      setShowProfileModal(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not save profile. Please try again.");
+    } finally {
+      setIsProfileSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!user) return;
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error("Please fill in all password fields.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("New password and confirmation do not match.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters.");
+      return;
+    }
+
+    setIsPasswordChanging(true);
+    try {
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+
+      if (authError) {
+        throw authError;
+      }
+
+      await changeUserPassword(user.email, newPassword);
+      await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: newPassword,
+      });
+      await refreshUserProfile();
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setShowProfileModal(false);
+      toast.success("Password updated successfully.");
+    } catch (error) {
+      console.error(error);
+      toast.error("Current password is incorrect or the update failed.");
+    } finally {
+      setIsPasswordChanging(false);
+    }
+  };
+
+  const calculateNotifications = (
+    docs: Document[],
+  ): DashboardNotification[] => {
+    if (!user) return [];
+
+    const now = new Date();
+    const notifications: DashboardNotification[] = [];
+
+    if (user.role === "staff") {
+      docs.forEach((doc) => {
+        if (doc.assignedTo !== user.email) return;
+
+        const createdDate = new Date(doc.createdAt || doc.submittedDate);
+        const createdAge = now.getTime() - createdDate.getTime();
+        const isNew =
+          !Number.isNaN(createdDate.getTime()) &&
+          createdAge <= 24 * 60 * 60 * 1000;
+
+        const deadlineDate = new Date(doc.deadline);
+        const deadlineDiff = deadlineDate.getTime() - now.getTime();
+        const isDueTomorrow =
+          !Number.isNaN(deadlineDate.getTime()) &&
+          deadlineDiff > 0 &&
+          deadlineDiff <= 24 * 60 * 60 * 1000;
+
+        if (doc.status === "Needs revision") {
+          const revisionReason = doc.revisionComments
+            ? " Reason: " + doc.revisionComments
+            : "";
+
+          notifications.push({
+            id: `${doc.id}-revision`,
+            title: "Document needs revision",
+            message:
+              (doc.title || doc.id) +
+              " was sent back for revision." +
+              revisionReason,
+            severity: "urgent",
+            docId: doc.id,
+          });
+          return;
+        }
+
+        if (
+          isDueTomorrow &&
+          !["Completed", "Released", "Approved"].includes(doc.status)
+        ) {
+          notifications.push({
+            id: `${doc.id}-deadline`,
+            title: "Deadline approaching",
+            message:
+              (doc.title || doc.id) +
+              " is due within 24 hours (" +
+              doc.deadline +
+              ").",
+            severity: "warning",
+            docId: doc.id,
+          });
+          return;
+        }
+
+        if (isNew) {
+          notifications.push({
+            id: `${doc.id}-new`,
+            title: "New assignment",
+            message:
+              (doc.title || doc.id) +
+              " was assigned to you within the last 24 hours.",
+            severity: "info",
+            docId: doc.id,
+          });
+        }
+      });
+    }
+
+    if (user.role === "admin") {
+      const pending = docs.filter((doc) => doc.status === "Sent for approval");
+      if (pending.length > 0) {
+        const approvalPlural = pending.length === 1 ? "" : "s";
+        const approvalVerb = pending.length === 1 ? "is" : "are";
+
+        notifications.push({
+          id: "admin-approval",
+          title: "Documents need approval",
+          message:
+            "There " +
+            approvalVerb +
+            " " +
+            pending.length +
+            " document" +
+            approvalPlural +
+            " waiting for admin approval.",
+          severity: "urgent",
+        });
+      }
+    }
+
+    return notifications;
+  };
+
+  useEffect(() => {
+    if (!user || documents.length === 0) return;
+
+    const notes = calculateNotifications(documents);
+    setNotifications(notes);
+
+    if (notes.length > 0 && !notificationSeenRef.current) {
+      setShowNotificationPanel(true);
+      toast(
+        "You have " +
+          notes.length +
+          " important announcement" +
+          (notes.length === 1 ? "" : "s") +
+          ".",
+      );
+      notificationSeenRef.current = true;
+    }
+  }, [documents, user]);
+
+  useEffect(() => {
+    if (showNotificationPanel) {
+      const timer = window.setTimeout(() => {
+        setShowNotificationPanel(false);
+      }, 12000);
+      return () => window.clearTimeout(timer);
+    }
+  }, [showNotificationPanel]);
 
   // Sync editForm whenever a different document is selected
   useEffect(() => {
@@ -470,12 +767,27 @@ export default function Dashboard() {
     window.location.href = "/login";
   };
 
+  const addStatusChangeLog = async (
+    documentId: string,
+    oldStatus: Document["status"] | string | undefined,
+    newStatus: Document["status"] | string,
+    actor: string,
+    note?: string,
+  ) => {
+    await addAuditLog(
+      documentId,
+      formatStatusChangeTitle(oldStatus, newStatus),
+      actor,
+      [formatStatusChangeTitle(oldStatus, newStatus), note]
+        .filter(Boolean)
+        .join(". "),
+    );
+  };
+
   const handleSaveEdits = async () => {
     if (!selectedDoc || isSaving) return;
     setIsSaving(true);
 
-    const newStatus =
-      (editForm.status as Document["status"]) || selectedDoc.status;
     const actor = user?.name || "Admin";
 
     const resolvedDeadline = editForm.deadline || selectedDoc.deadline;
@@ -498,6 +810,7 @@ export default function Dashboard() {
         source: editForm.source,
         destination: editForm.destination,
         deadline: resolvedDeadline,
+        documentType: editForm.documentType,
       });
 
       // Log every field that actually changed
@@ -510,9 +823,10 @@ export default function Dashboard() {
         );
       }
       if (effectiveStatus !== selectedDoc.status) {
-        await addAuditLog(
+        await addStatusChangeLog(
           selectedDoc.id,
-          `Status changed from ${selectedDoc.status} to ${effectiveStatus}`,
+          selectedDoc.status,
+          effectiveStatus,
           actor,
         );
       }
@@ -576,25 +890,24 @@ export default function Dashboard() {
     try {
       const doc = documents.find((d) => d.id === docId);
       const oldStatus = doc?.status || "";
+      if (oldStatus === value) return;
+
       await updateDocument(docId, { status: value });
-      await addAuditLog(
-        docId,
-        "Status Updated",
-        user?.name || "Admin",
-        `"${oldStatus}" → "${value}"`,
-      );
-      setDocuments((prev) =>
-        prev.map((doc) =>
-          doc.id === docId
-            ? { ...doc, status: value, updatedAt: new Date().toISOString() }
-            : doc,
-        ),
-      );
+      await addStatusChangeLog(docId, oldStatus, value, user?.name || "Staff");
+
+      const updated = await getDocuments();
+      setDocuments(updated);
       if (selectedDoc?.id === docId) {
-        setSelectedDoc({ ...selectedDoc, status: value });
+        const refreshed = updated.find((d) => d.id === docId);
+        if (refreshed) {
+          setSelectedDoc(refreshed);
+          setEditForm((prev) => ({ ...prev, status: refreshed.status }));
+        }
       }
+      toast.success(`Status changed to ${value}.`);
     } catch (err) {
       console.error("Failed to update status:", err);
+      toast.error("Failed to update status.");
     }
   };
 
@@ -647,21 +960,74 @@ export default function Dashboard() {
     pending: visibleDocuments.filter((d) => d.status === "Pending").length,
     processing: visibleDocuments.filter((d) => d.status === "Processing")
       .length,
-    completed: visibleDocuments.filter(
+    overdue: visibleDocuments.filter((d) => d.status === "Overdue").length,
+    sentForApproval: visibleDocuments.filter(
+      (d) => d.status === "Sent for approval",
+    ).length,
+    needsRevision: visibleDocuments.filter((d) => d.status === "Needs revision")
+      .length,
+    approvedCompleted: visibleDocuments.filter(
       (d) =>
         d.status === "Approved" ||
         d.status === "Released" ||
         d.status === "Completed",
     ).length,
-    overdue: visibleDocuments.filter((d) => d.status === "Overdue").length,
-    sentForApproval: visibleDocuments.filter(
-      (d) => d.status === "Sent for approval",
-    ).length,
   };
+
+  const statusCards = [
+    {
+      key: "Pending" as StatusFilter,
+      title: "Pending",
+      count: stats.pending,
+      icon: AlertCircle,
+      iconClass: "text-yellow-600",
+      bgClass: "bg-yellow-100",
+    },
+    {
+      key: "Processing" as StatusFilter,
+      title: "Processing",
+      count: stats.processing,
+      icon: HourglassIcon,
+      iconClass: "text-blue-600",
+      bgClass: "bg-blue-100",
+    },
+    {
+      key: "Overdue" as StatusFilter,
+      title: "Overdue",
+      count: stats.overdue,
+      icon: AlertCircle,
+      iconClass: "text-red-600",
+      bgClass: "bg-red-100",
+    },
+    {
+      key: "Sent for approval" as StatusFilter,
+      title: "Sent for Approval",
+      count: stats.sentForApproval,
+      icon: HourglassIcon,
+      iconClass: "text-purple-600",
+      bgClass: "bg-purple-100",
+    },
+    {
+      key: "Needs revision" as StatusFilter,
+      title: "Needs Revision",
+      count: stats.needsRevision,
+      icon: AlertCircle,
+      iconClass: "text-orange-600",
+      bgClass: "bg-orange-100",
+    },
+    {
+      key: "approved-completed" as StatusFilter,
+      title: "Approved/Completed",
+      count: stats.approvedCompleted,
+      icon: CheckCircle,
+      iconClass: "text-green-600",
+      bgClass: "bg-green-100",
+    },
+  ];
 
   const avgResponseTime = "3.2 days";
 
-  // Filter by search (DTN or document name), document type, assignment, and deadline
+  // Filter by search (DTN or document name), document type, assignment, deadline, and status
   const filteredDocuments = visibleDocuments.filter((doc) => {
     const matchesSearch =
       doc.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -670,6 +1036,12 @@ export default function Dashboard() {
       selectedFilter === "all" || doc.documentType === selectedFilter;
     const matchesAssignment =
       filterAssignedTo === "all" || doc.assignedTo === filterAssignedTo;
+
+    const matchesStatus =
+      selectedStatusFilter === "all" ||
+      (selectedStatusFilter === "approved-completed"
+        ? ["Approved", "Released", "Completed"].includes(doc.status)
+        : doc.status === selectedStatusFilter);
 
     let matchesDeadline = true;
     if (filterDeadline !== "all") {
@@ -691,7 +1063,11 @@ export default function Dashboard() {
     }
 
     return (
-      matchesSearch && matchesDocType && matchesAssignment && matchesDeadline
+      matchesSearch &&
+      matchesDocType &&
+      matchesAssignment &&
+      matchesStatus &&
+      matchesDeadline
     );
   });
 
@@ -722,12 +1098,128 @@ export default function Dashboard() {
               <h1 className="text-2xl font-bold text-primary">MPDO Tracker</h1>
             </div>
             <div className="flex items-center gap-6">
+              {/* Notifications */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowNotificationPanel((prev) => !prev)}
+                  className="relative p-2 hover:bg-gray-100 rounded-lg transition"
+                  title="Notifications"
+                >
+                  <Bell className="w-5 h-5 text-gray-600" />
+                  {unreadNotificationCount > 0 && (
+                    <span className="absolute -top-1 -right-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white">
+                      {unreadNotificationCount}
+                    </span>
+                  )}
+                </button>
+                {showNotificationPanel && (
+                  <div className="absolute right-0 mt-2 w-96 max-h-[420px] rounded-3xl border border-slate-200 bg-white/95 shadow-2xl backdrop-blur-xl z-50">
+                    <div className="flex items-center justify-between gap-3 border-b border-slate-200/80 bg-slate-50 px-4 py-4">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          Important announcements
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {activeNotifications.length} unread notification
+                          {activeNotifications.length === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() =>
+                            setReadNotificationIds((prev) => [
+                              ...new Set([
+                                ...prev,
+                                ...activeNotifications.map((note) => note.id),
+                              ]),
+                            ])
+                          }
+                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100"
+                        >
+                          Mark all as read
+                        </button>
+                        <button
+                          onClick={() => setShowNotificationPanel(false)}
+                          className="text-slate-400 hover:text-slate-600"
+                          title="Close notifications"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2 overflow-y-auto max-h-[320px] p-3">
+                      {activeNotifications.length === 0 ? (
+                        <div className="rounded-3xl bg-slate-50 p-5 text-sm text-slate-600">
+                          No new announcements. You're all caught up.
+                        </div>
+                      ) : (
+                        activeNotifications.map((note) => (
+                          <button
+                            key={note.id}
+                            onClick={() => {
+                              setReadNotificationIds((prev) =>
+                                Array.from(new Set([...prev, note.id])),
+                              );
+                              if (note.docId) {
+                                const doc = documents.find(
+                                  (d) => d.id === note.docId,
+                                );
+                                if (doc) setSelectedDoc(doc);
+                              }
+                              setShowNotificationPanel(false);
+                            }}
+                            className="w-full rounded-3xl border border-slate-200 bg-white p-4 text-left transition hover:border-slate-300 hover:shadow-sm"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">
+                                  {note.title}
+                                </p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  Unread
+                                </p>
+                              </div>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                                  note.severity === "urgent"
+                                    ? "bg-red-100 text-red-700"
+                                    : note.severity === "warning"
+                                      ? "bg-amber-100 text-amber-700"
+                                      : "bg-sky-100 text-sky-700"
+                                }`}
+                              >
+                                {note.severity === "urgent"
+                                  ? "Urgent"
+                                  : note.severity === "warning"
+                                    ? "Warning"
+                                    : "Info"}
+                              </span>
+                            </div>
+                            <p className="mt-3 text-sm leading-6 text-slate-600">
+                              {note.message}
+                            </p>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Account Name - showing email prefix and role */}
               <div className="text-right">
                 <p className="font-semibold text-gray-900">
-                  {user?.email?.split("@")[0]}
+                  {user?.name || user?.email?.split("@")[0]}
                 </p>
                 <p className="text-sm text-gray-500 capitalize">{user?.role}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => setShowProfileModal(true)}
+                >
+                  Edit profile
+                </Button>
               </div>
 
               {/* Admin-only employee menu */}
@@ -851,81 +1343,135 @@ export default function Dashboard() {
         </div>
       </header>
 
+      <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Update profile</DialogTitle>
+            <DialogDescription>
+              Change your name, department, and password securely.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="profile-name">Name</Label>
+              <Input
+                id="profile-name"
+                value={profileName}
+                onChange={(event) => setProfileName(event.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="profile-email">Email</Label>
+              <Input id="profile-email" value={user?.email ?? ""} disabled />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="profile-department">Department</Label>
+              <Input
+                id="profile-department"
+                value={profileDepartment}
+                onChange={(event) => setProfileDepartment(event.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button
+              variant="secondary"
+              onClick={handleSaveProfile}
+              disabled={isProfileSaving}
+            >
+              {isProfileSaving ? "Saving..." : "Save profile"}
+            </Button>
+            <Button variant="ghost" onClick={() => setShowProfileModal(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+          <div className="mt-6 border-t border-slate-200 pt-4">
+            <p className="text-sm font-semibold text-slate-900">Change password</p>
+            <div className="grid gap-4 py-3">
+              <div className="grid gap-2">
+                <Label htmlFor="current-password">Current password</Label>
+                <Input
+                  id="current-password"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="new-password">New password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="confirm-password">Confirm new password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                className="w-full rounded-xl"
+                onClick={handleChangePassword}
+                disabled={isPasswordChanging}
+              >
+                {isPasswordChanging ? "Updating..." : "Update password"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Pending</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {stats.pending}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                <AlertCircle className="w-6 h-6 text-yellow-600" />
-              </div>
-            </div>
-          </div>
+          {statusCards.map((card) => {
+            const isActive = selectedStatusFilter === card.key;
+            const onClick = () =>
+              setSelectedStatusFilter((current) =>
+                current === card.key ? "all" : card.key,
+              );
 
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Processing</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {stats.processing}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <HourglassIcon className="w-6 h-6 text-blue-600" />
-              </div>
-            </div>
-          </div>
+            const activeClasses = isActive
+              ? "border-primary ring-2 ring-primary/20"
+              : "border-gray-200";
 
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Completed</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {stats.completed}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Overdue</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {stats.overdue}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                <AlertCircle className="w-6 h-6 text-red-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">
-                  Sent for Approval
-                </p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
-                  {stats.sentForApproval}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <HourglassIcon className="w-6 h-6 text-purple-600" />
-              </div>
-            </div>
-          </div>
+            return (
+              <button
+                key={card.key}
+                type="button"
+                onClick={onClick}
+                className={`bg-white rounded-xl p-6 shadow-sm border ${activeClasses} text-left transition hover:shadow-md`}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-sm font-medium">
+                      {card.title}
+                    </p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2">
+                      {card.count}
+                    </p>
+                  </div>
+                  <div
+                    className={`w-12 h-12 ${card.bgClass} rounded-lg flex items-center justify-center`}
+                  >
+                    {(() => {
+                      const Icon = card.icon;
+                      return <Icon className={`w-6 h-6 ${card.iconClass}`} />;
+                    })()}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         {/* Efficiency Metrics
@@ -1059,8 +1605,7 @@ export default function Dashboard() {
               </div>
             ) : (
               filteredDocuments.map((doc) => {
-                const statusColor =
-                  statusColors[doc.status as keyof typeof statusColors];
+                const statusColor = getStatusColor(doc.status);
                 const StatusIcon = statusColor.icon;
                 const assignedEmployee = employees.find(
                   (e) => e.email === doc.assignedTo,
@@ -1141,7 +1686,7 @@ export default function Dashboard() {
                         >
                           <SelectTrigger
                             onClick={(e) => e.stopPropagation()}
-                            className={`rounded-full border ${statusColor.border} bg-white text-left px-3 py-1.5 h-9 inline-flex items-center gap-2 w-fit min-w-[10rem]`}
+                            className={`rounded-full border ${statusColor.border} ${statusColor.bg} text-left px-3 py-1.5 h-9 inline-flex items-center gap-2 w-fit min-w-[10rem]`}
                           >
                             <StatusIcon
                               className={`w-4 h-4 ${statusColor.text}`}
@@ -1346,6 +1891,7 @@ export default function Dashboard() {
                                 await approveDocument(
                                   selectedDoc.id,
                                   user?.name || "Admin",
+                                  selectedDoc.status,
                                 );
                                 const updated = await getDocuments();
                                 setDocuments(updated);
@@ -1462,7 +2008,7 @@ export default function Dashboard() {
                         }
                       >
                         <option value="">Select Type</option>
-                        <option value="Communication-Letter">
+                        <option value="Communication Letter">
                           Communication Letter
                         </option>
                         <option value="Letter Request">Letter Request</option>
@@ -1473,8 +2019,8 @@ export default function Dashboard() {
                         <option value="Resolution">Resolution</option>
                         <option value="Ordinance">Ordinance</option>
                         <option value="Travel Order">Travel Order</option>
-                        <option value="Zoning, Certification, and Locational Clearance">
-                          Zoning, Certification, and Locational Clearance
+                        <option value="Zoning Certification and Locational Clearance">
+                          Zoning Certification and Locational Clearance
                         </option>
                         {/* {customDocumentTypes.map((type) => (
                           <option key={type} value={type}>
@@ -1679,15 +2225,20 @@ export default function Dashboard() {
                 <p className="text-xs text-gray-500 uppercase font-semibold mb-2">
                   Status
                 </p>
-                {docViewMode === "edit" ? (
+                {docViewMode === "edit" || user?.role === "staff" ? (
                   <Select
                     value={editForm.status || ""}
                     onValueChange={(value) => {
+                      const nextStatus = value as Document["status"];
                       setEditForm({
                         ...editForm,
-                        status: value as Document["status"],
+                        status: nextStatus,
                       });
-                      if (value === "Approved") {
+                      if (user?.role === "staff") {
+                        handleDocStatusChange(selectedDoc.id, nextStatus);
+                        return;
+                      }
+                      if (nextStatus === "Approved") {
                         setShowApprovalWorkflow(true);
                       }
                     }}
@@ -1949,21 +2500,38 @@ export default function Dashboard() {
               {/* Revision Comments - displayed when admin sends revisions */}
               {selectedDoc.revisionComments && (
                 <div className="border-t pt-6">
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0">
-                        <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-yellow-900 mb-2">
-                          Admin Comments for Revision
-                        </h4>
-                        <p className="text-yellow-800 text-sm whitespace-pre-wrap">
-                          {selectedDoc.revisionComments}
-                        </p>
+                  <div className="flex items-center justify-between gap-3 mb-4">
+                    <div>
+                      <h4 className="font-semibold text-yellow-900">
+                        Admin Comments for Revision
+                      </h4>
+                      <p className="text-xs text-gray-500">
+                        This document is marked as needing revision.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowRevisionPanel((prev) => !prev)}
+                      className="text-sm font-medium text-primary hover:text-primary/80"
+                      type="button"
+                    >
+                      {showRevisionPanel ? "Hide details" : "View details"}
+                    </button>
+                  </div>
+
+                  {showRevisionPanel && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0">
+                          <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-yellow-800 text-sm whitespace-pre-wrap">
+                            {selectedDoc.revisionComments}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
 
@@ -1988,6 +2556,11 @@ export default function Dashboard() {
                         <p className="text-sm text-gray-500">
                           {entry.date} • By {entry.by}
                         </p>
+                        {entry.details && (
+                          <p className="text-sm text-gray-700 mt-1">
+                            {entry.details}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -2005,6 +2578,7 @@ export default function Dashboard() {
                           await sendDocumentForApproval(
                             selectedDoc.id,
                             user?.name || "Staff",
+                            selectedDoc.status,
                           );
                           const updated = await getDocuments();
                           setDocuments(updated);
@@ -2351,9 +2925,10 @@ export default function Dashboard() {
                       await updateDocument(selectedDoc.id, {
                         status: "Approved",
                       });
-                      await addAuditLog(
+                      await addStatusChangeLog(
                         selectedDoc.id,
-                        "Document Approved",
+                        selectedDoc.status,
+                        "Approved",
                         user?.name || "Admin",
                         approvalRemarks || "Approved by admin",
                       );
@@ -2410,9 +2985,10 @@ export default function Dashboard() {
                     await updateDocument(selectedDoc.id, {
                       status: "Approved",
                     });
-                    await addAuditLog(
+                    await addStatusChangeLog(
                       selectedDoc.id,
-                      "Marked as Done",
+                      selectedDoc.status,
+                      "Approved",
                       user?.name || "Staff",
                       `Returned to ${selectedDoc.source}`,
                     );
@@ -2547,8 +3123,19 @@ export default function Dashboard() {
                   }}
                   className="ml-2 p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-100 rounded transition-colors flex-shrink-0"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                    />
                   </svg>
                 </button>
               </div>
@@ -2722,6 +3309,7 @@ export default function Dashboard() {
                         selectedDoc.id,
                         revisionComments,
                         user?.name || "Admin",
+                        selectedDoc.status,
                       );
                       const updated = await getDocuments();
                       setDocuments(updated);
@@ -2751,4 +3339,9 @@ export default function Dashboard() {
       )}
     </div>
   );
+}
+
+function formatStatusChangeTitle(oldStatus: string, newStatus: string): string {
+  if (!oldStatus) return `Status changed to ${newStatus}`;
+  return `Status changed from ${oldStatus} to ${newStatus}`;
 }

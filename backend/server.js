@@ -48,6 +48,59 @@ app.get("/api/ping", (_req, res) => {
   res.json({ message: process.env.PING_MESSAGE || "pong" });
 });
 
+app.post("/api/user/update-profile", async (req, res) => {
+  const { id, name, department, personal_email } = req.body;
+  if (!id || !name) {
+    return res.status(400).json({ error: "Employee id and name are required." });
+  }
+
+  const updates = { name, department };
+  if (personal_email !== undefined) updates.personal_email = personal_email || null;
+
+  const { data, error } = await supabaseAdmin
+    .from("employees")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    return res.status(500).json({ error: error.message || "Unable to update profile." });
+  }
+
+  return res.json({ success: true, profile: data });
+});
+
+app.post("/api/user/change-password", async (req, res) => {
+  const { email, newPassword } = req.body;
+  if (!email || !newPassword) {
+    return res.status(400).json({ error: "Email and new password are required." });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: "Password must be at least 6 characters." });
+  }
+
+  const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers();
+  if (error) {
+    return res.status(500).json({ error: "Failed to look up auth users." });
+  }
+
+  const authUser = users.find((u) => u.email === email);
+  if (!authUser) {
+    return res.status(404).json({ error: "Auth account not found." });
+  }
+
+  const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(authUser.id, {
+    password: newPassword,
+  });
+  if (updateErr) {
+    return res.status(500).json({ error: updateErr.message || "Failed to change password." });
+  }
+
+  return res.json({ success: true });
+});
+
 // ── Get or create a folder by name inside a given parent ─────────────────────
 async function getOrCreateFolderIn(name, parentId) {
   const search = await drive.files.list({

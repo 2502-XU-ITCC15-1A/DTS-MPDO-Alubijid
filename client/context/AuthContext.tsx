@@ -7,6 +7,7 @@ export interface User {
   email: string;
   role: "admin" | "staff";
   department?: string;
+  personal_email?: string;
 }
 
 interface AuthContextType {
@@ -15,6 +16,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  refreshUserProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: data.email,
       role: data.role,
       department: data.department,
+      personal_email: data.personal_email ?? undefined,
     });
     return true;
   }
@@ -75,13 +78,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshUserProfile = async () => {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+    if (error) {
+      console.error("Failed to refresh session", error);
+      return;
+    }
+
+    if (session?.user?.email) {
+      await loadUserProfile(session.user.email);
+    }
+  };
+
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: !!user,
+        isLoading,
+        login,
+        logout,
+        refreshUserProfile,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

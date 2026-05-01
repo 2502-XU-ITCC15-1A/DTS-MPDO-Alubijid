@@ -35,7 +35,7 @@ export interface DocumentFile {
 }
 
 // Document status type
-export type DocumentStatus = "Pending" | "Processing" | "Approved" | "Released" | "Overdue" | "Sent for approval" | "Completed";
+export type DocumentStatus = "Pending" | "Processing" | "Needs revision" | "Approved" | "Released" | "Overdue" | "Sent for approval" | "Completed";
 
 // Document type
 export type DocumentType = "Received" | "Assigned" | "Opened" | "Processed" | "Approved" | "Released";
@@ -55,6 +55,7 @@ export type RoutingAction =
 export interface RoutingSlip {
   actions: RoutingAction[];
   remarks: string;
+  revision_comments?: string;
 }
 
 // Document interface
