@@ -1,16 +1,11 @@
 [build]
   command = "npm run build:client"
-  functions = "netlify/functions"
   publish = "dist/spa"
 
-[functions]
-  external_node_modules = ["express", "busboy", "googleapis"]
-  node_bundler = "esbuild"
-
-# Proxy /api/* to the Netlify serverless function
+# Proxy /api/* to the Render backend — replace the URL below with your Render service URL
 [[redirects]]
   from = "/api/*"
-  to = "/.netlify/functions/api/:splat"
+  to = "https://dts-mpdo-alubijid.onrender.com/api/:splat"
   status = 200
   force = true
 

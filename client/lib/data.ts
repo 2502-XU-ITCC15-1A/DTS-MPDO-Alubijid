@@ -283,13 +283,23 @@ export async function uploadFile(
   file: File,
   uploadedBy: string,
 ): Promise<string> {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("documentId", documentId);
+  // Encode file as base64 so it works reliably on both local backend and Netlify Functions
+  const fileBase64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 
   const res = await fetch("/api/upload", {
     method: "POST",
-    body: formData,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      documentId,
+      fileName: file.name,
+      mimeType: file.type || "application/octet-stream",
+      fileBase64,
+    }),
   });
 
   if (!res.ok) {

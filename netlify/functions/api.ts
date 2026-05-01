@@ -1,7 +1,6 @@
 import serverless from "serverless-http";
 import express from "express";
 import cors from "cors";
-import multer from "multer";
 import { google } from "googleapis";
 import { Readable } from "stream";
 import { createClient } from "@supabase/supabase-js";
@@ -18,8 +17,6 @@ const oauth2Client = new google.auth.OAuth2(
 );
 oauth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
 const drive = google.drive({ version: "v3", auth: oauth2Client });
-
-const upload = multer({ storage: multer.memoryStorage() });
 
 const app = express();
 app.use(cors());
@@ -144,18 +141,20 @@ async function getOrCreateFolder(documentId: string, date = new Date()): Promise
   return await getOrCreateFolderIn(documentId, monthFolderId);
 }
 
-// Upload file to Google Drive (multipart form)
-app.post("/api/upload", upload.single("file"), async (req, res) => {
+// Upload file to Google Drive (accepts JSON with base64-encoded file)
+app.post("/api/upload", async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: "No file provided" });
-    const { documentId } = req.body;
+    const { documentId, fileName, mimeType, fileBase64 } = req.body;
+    if (!fileBase64) return res.status(400).json({ error: "No file provided" });
     if (!documentId) return res.status(400).json({ error: "No documentId provided" });
+    if (!fileName) return res.status(400).json({ error: "No fileName provided" });
 
+    const buffer = Buffer.from(fileBase64, "base64");
     const folderId = await getOrCreateFolder(documentId);
 
     const driveRes = await drive.files.create({
-      requestBody: { name: req.file.originalname, parents: [folderId!] },
-      media: { mimeType: req.file.mimetype, body: Readable.from([req.file.buffer]) },
+      requestBody: { name: fileName, parents: [folderId!] },
+      media: { mimeType: mimeType || "application/octet-stream", body: Readable.from([buffer]) },
       fields: "id, webViewLink",
     });
 
