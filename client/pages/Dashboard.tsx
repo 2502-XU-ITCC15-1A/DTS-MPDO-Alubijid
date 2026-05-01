@@ -1253,15 +1253,6 @@ export default function Dashboard() {
                   {user?.name || user?.email?.split("@")[0]}
                 </p>
                 <p className="text-sm text-gray-500 capitalize">{user?.role}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2 flex items-center gap-1.5 text-primary border-primary/40 hover:bg-primary/5 hover:border-primary font-medium rounded-lg transition-all duration-200 shadow-sm"
-                  onClick={() => setShowProfileModal(true)}
-                >
-                  <Edit className="w-3 h-3" />
-                  Edit Profile
-                </Button>
               </div>
 
               {/* Account Name - showing email prefix and role */}
@@ -1517,7 +1508,7 @@ export default function Dashboard() {
               <Button
                 variant="outline"
                 onClick={() => setShowProfileModal(true)}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 px-4 py-2 text-primary border-primary/40 hover:bg-primary/5 hover:border-primary font-medium rounded-lg transition-all duration-200 shadow-sm"
               >
                 <Edit className="w-4 h-4" />
                 Edit Profile
