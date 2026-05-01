@@ -207,13 +207,25 @@ export async function updateDocument(
   if (fields.status) mapped.status = fields.status;
   if (fields.assignedTo) mapped.assigned_to = fields.assignedTo;
   if (fields.source) mapped.source = fields.source;
+  if (fields.documentType) mapped.document_type = fields.documentType;
   if (fields.destination !== undefined) mapped.destination = fields.destination;
   if (fields.deadline) mapped.deadline = fields.deadline;
   if (fields.archived !== undefined) mapped.archived = fields.archived;
   if (fields.routingActions) {
-    // Store routing actions as JSON array in the database
+    const { data: existingDoc, error: existingError } = await supabase
+      .from("documents")
+      .select("routing_slip")
+      .eq("id", id)
+      .single();
+
+    const existingRemarks =
+      existingError || !existingDoc || !existingDoc.routing_slip
+        ? ""
+        : (existingDoc.routing_slip as any).remarks || "";
+
     mapped.routing_slip = JSON.stringify({
       actions: fields.routingActions,
+      remarks: existingRemarks,
     });
   }
 
