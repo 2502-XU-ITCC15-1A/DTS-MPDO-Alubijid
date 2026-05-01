@@ -217,6 +217,9 @@ type DashboardNotification = {
   message: string;
   severity: "info" | "warning" | "urgent";
   docId?: string;
+  actor?: string;
+  timestamp?: string;
+  details?: string;
   read?: boolean;
 };
 
@@ -545,9 +548,94 @@ export default function Dashboard() {
     const now = new Date();
     const notifications: DashboardNotification[] = [];
 
+    const getLatestHistoryEntry = (
+      doc: Document,
+      matcher: (entry: Document["history"][number]) => boolean,
+    ) => [...doc.history].reverse().find(matcher);
+
+    if (user.role === "admin") {
+      docs.forEach((doc) => {
+        if (doc.status !== "Sent for approval") return;
+
+        const sentEntry = getLatestHistoryEntry(doc, (entry) =>
+          entry.action.includes("Sent for Admin Approval") ||
+          entry.action.includes("Sent for approval"),
+        );
+
+        notifications.push({
+          id: `${doc.id}-sent-for-approval`,
+          title: "Document sent for approval",
+          message: sentEntry
+            ? `${doc.title || doc.id} was sent for admin approval by ${sentEntry.by} on ${sentEntry.date}.`
+            : `${doc.title || doc.id} is waiting for admin approval.`,
+          severity: "urgent",
+          docId: doc.id,
+          actor: sentEntry?.by,
+          timestamp: sentEntry?.date,
+          details: sentEntry?.details,
+        });
+      });
+    }
+
     if (user.role === "staff") {
       docs.forEach((doc) => {
         if (doc.assignedTo !== user.email) return;
+
+        const revisionEntry = getLatestHistoryEntry(doc, (entry) =>
+          entry.action.includes("Document Revised") ||
+          entry.action.includes("Revision requested"),
+        );
+        const approvalEntry = getLatestHistoryEntry(doc, (entry) =>
+          entry.action.includes("Document Approved"),
+        );
+        const sentEntry = getLatestHistoryEntry(doc, (entry) =>
+          entry.action.includes("Sent for Admin Approval"),
+        );
+
+        if (doc.status === "Needs revision" && revisionEntry) {
+          notifications.push({
+            id: `${doc.id}-revision`,
+            title: "Document needs revision",
+            message: `${doc.title || doc.id} was sent back for revision by ${revisionEntry.by} on ${revisionEntry.date}.`,
+            severity: "urgent",
+            docId: doc.id,
+            actor: revisionEntry.by,
+            timestamp: revisionEntry.date,
+            details: revisionEntry.details,
+          });
+          return;
+        }
+
+        if (
+          ["Completed", "Approved"].includes(doc.status) &&
+          approvalEntry
+        ) {
+          notifications.push({
+            id: `${doc.id}-approved`,
+            title: "Document approved",
+            message: `${doc.title || doc.id} was approved by ${approvalEntry.by} on ${approvalEntry.date}.`,
+            severity: "info",
+            docId: doc.id,
+            actor: approvalEntry.by,
+            timestamp: approvalEntry.date,
+            details: approvalEntry.details,
+          });
+          return;
+        }
+
+        if (doc.status === "Sent for approval" && sentEntry) {
+          notifications.push({
+            id: `${doc.id}-sent-for-approval`,
+            title: "Sent for admin approval",
+            message: `${doc.title || doc.id} was sent for admin approval by ${sentEntry.by} on ${sentEntry.date}.`,
+            severity: "warning",
+            docId: doc.id,
+            actor: sentEntry.by,
+            timestamp: sentEntry.date,
+            details: sentEntry.details,
+          });
+          return;
+        }
 
         const createdDate = new Date(doc.createdAt || doc.submittedDate);
         const createdAge = now.getTime() - createdDate.getTime();
@@ -562,28 +650,7 @@ export default function Dashboard() {
           deadlineDiff > 0 &&
           deadlineDiff <= 24 * 60 * 60 * 1000;
 
-        if (doc.status === "Needs revision") {
-          const revisionReason = doc.revisionComments
-            ? " Reason: " + doc.revisionComments
-            : "";
-
-          notifications.push({
-            id: `${doc.id}-revision`,
-            title: "Document needs revision",
-            message:
-              (doc.title || doc.id) +
-              " was sent back for revision." +
-              revisionReason,
-            severity: "urgent",
-            docId: doc.id,
-          });
-          return;
-        }
-
-        if (
-          isDueTomorrow &&
-          !["Completed", "Released", "Approved"].includes(doc.status)
-        ) {
+        if (isDueTomorrow && !["Completed", "Released", "Approved"].includes(doc.status)) {
           notifications.push({
             id: `${doc.id}-deadline`,
             title: "Deadline approaching",
@@ -610,28 +677,6 @@ export default function Dashboard() {
           });
         }
       });
-    }
-
-    if (user.role === "admin") {
-      const pending = docs.filter((doc) => doc.status === "Sent for approval");
-      if (pending.length > 0) {
-        const approvalPlural = pending.length === 1 ? "" : "s";
-        const approvalVerb = pending.length === 1 ? "is" : "are";
-
-        notifications.push({
-          id: "admin-approval",
-          title: "Documents need approval",
-          message:
-            "There " +
-            approvalVerb +
-            " " +
-            pending.length +
-            " document" +
-            approvalPlural +
-            " waiting for admin approval.",
-          severity: "urgent",
-        });
-      }
     }
 
     return notifications;
@@ -1251,6 +1296,13 @@ export default function Dashboard() {
                                 <p className="mt-1 text-xs text-slate-500">
                                   Unread
                                 </p>
+                                {(note.actor || note.timestamp) && (
+                                  <p className="mt-1 text-xs text-slate-500">
+                                    {note.actor ? `By ${note.actor}` : ""}
+                                    {note.actor && note.timestamp ? " · " : ""}
+                                    {note.timestamp || ""}
+                                  </p>
+                                )}
                               </div>
                               <span
                                 className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
@@ -1271,6 +1323,11 @@ export default function Dashboard() {
                             <p className="mt-3 text-sm leading-6 text-slate-600">
                               {note.message}
                             </p>
+                            {note.details && (
+                              <p className="mt-2 text-xs text-slate-500">
+                                {note.details}
+                              </p>
+                            )}
                           </button>
                         ))
                       )}
