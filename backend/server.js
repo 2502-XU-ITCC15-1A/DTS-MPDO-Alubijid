@@ -173,26 +173,22 @@ app.get("/api/test-drive", async (_req, res) => {
   }
 });
 
-// ── Upload file to Google Drive (multipart form) ─────────────────────────────
-app.post("/api/upload", upload.single("file"), async (req, res) => {
+// ── Upload file to Google Drive (base64 JSON body) ───────────────────────────
+app.post("/api/upload", async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: "No file provided" });
-    const { documentId } = req.body;
+    const { documentId, fileName, mimeType, fileBase64 } = req.body;
+    if (!fileBase64) return res.status(400).json({ error: "No file provided" });
     if (!documentId) return res.status(400).json({ error: "No documentId provided" });
+    if (!fileName) return res.status(400).json({ error: "No fileName provided" });
 
-    console.log(`Uploading "${req.file.originalname}" (${req.file.size} bytes) for document ${documentId}`);
-
+    const buffer = Buffer.from(fileBase64, "base64");
     const folderId = await getOrCreateFolder(documentId);
-    console.log(`Drive folder ID: ${folderId}`);
 
-    // Wrap buffer in array so Readable emits the whole chunk at once (not byte-by-byte)
     const driveRes = await drive.files.create({
-      requestBody: { name: req.file.originalname, parents: [folderId] },
-      media: { mimeType: req.file.mimetype, body: Readable.from([req.file.buffer]) },
+      requestBody: { name: fileName, parents: [folderId] },
+      media: { mimeType: mimeType || "application/octet-stream", body: Readable.from([buffer]) },
       fields: "id, webViewLink",
     });
-
-    console.log(`Uploaded to Drive. File ID: ${driveRes.data.id}`);
 
     await drive.permissions.create({
       fileId: driveRes.data.id,
