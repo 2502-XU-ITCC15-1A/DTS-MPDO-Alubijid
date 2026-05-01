@@ -104,9 +104,9 @@ const statusColors = {
     icon: AlertCircle,
   },
   "Sent for approval": {
-    bg: "bg-purple-50",
+    bg: "bg-purple-100",
     border: "border-purple-200",
-    text: "text-purple-700",
+    text: "text-purple-600",
     icon: HourglassIcon,
   },
   Completed: {
@@ -146,7 +146,7 @@ const statusOptions = [
     value: "Sent for approval",
     label: "Sent for Approval",
     icon: HourglassIcon,
-    text: "text-purple-700",
+    text: "text-purple-600",
   },
   {
     value: "Needs revision",
@@ -178,6 +178,16 @@ const getStatusDetails = (status: string) => {
 const getStatusColor = (status: string) =>
   statusColors[status as keyof typeof statusColors] ?? statusColors.Pending;
 
+const parseStoredList = (key: string) => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    localStorage.removeItem(key);
+    return [];
+  }
+};
+
 const getStatusValue = (status: Document["status"]) =>
   status === "Released" ? "Approved" : status;
 
@@ -193,6 +203,12 @@ const formatStatusChangeTitle = (
   oldStatus: Document["status"] | string | undefined,
   newStatus: Document["status"] | string,
 ) => `Status Changed: ${getStatusLabel(oldStatus)} → ${getStatusLabel(newStatus)}`;
+
+const getDocumentCreatedTime = (doc: Document) => {
+  const value = doc.createdAt || doc.submittedDate || doc.timestamp;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
 
 const documentTypeFilters: DocumentType[] = [
   "Received",
@@ -334,10 +350,10 @@ export default function Dashboard() {
     designation: designationOptionsByUnit.MPDC[0],
   });
   const [customDocumentTypes, setCustomDocumentTypes] = useState<string[]>(() =>
-    JSON.parse(localStorage.getItem("customDocumentTypes") || "[]"),
+    parseStoredList("customDocumentTypes"),
   );
   const [customSources, setCustomSources] = useState<string[]>(() =>
-    JSON.parse(localStorage.getItem("customSources") || "[]"),
+    parseStoredList("customSources"),
   );
   const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
   const [newSourceName, setNewSourceName] = useState("");
@@ -389,14 +405,8 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
 
     // Load custom document types and sources from localStorage
-    const savedCustomTypes = localStorage.getItem("customDocumentTypes");
-    const savedCustomSources = localStorage.getItem("customSources");
-    if (savedCustomTypes) {
-      setCustomDocumentTypes(JSON.parse(savedCustomTypes));
-    }
-    if (savedCustomSources) {
-      setCustomSources(JSON.parse(savedCustomSources));
-    }
+    setCustomDocumentTypes(parseStoredList("customDocumentTypes"));
+    setCustomSources(parseStoredList("customSources"));
   }, []);
 
   useEffect(() => {
@@ -943,38 +953,40 @@ export default function Dashboard() {
   const avgResponseTime = "3.2 days";
 
   // Filter by search (DTN or document name), document type, assignment, and deadline
-  const filteredDocuments = visibleDocuments.filter((doc) => {
-    const matchesSearch =
-      doc.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesDocType =
-      selectedFilter === "all" || doc.documentType === selectedFilter;
-    const matchesAssignment =
-      filterAssignedTo === "all" || doc.assignedTo === filterAssignedTo;
+  const filteredDocuments = visibleDocuments
+    .filter((doc) => {
+      const matchesSearch =
+        doc.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        doc.title.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesDocType =
+        selectedFilter === "all" || doc.documentType === selectedFilter;
+      const matchesAssignment =
+        filterAssignedTo === "all" || doc.assignedTo === filterAssignedTo;
 
-    let matchesDeadline = true;
-    if (filterDeadline !== "all") {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const docDeadline = new Date(doc.deadline);
-      docDeadline.setHours(0, 0, 0, 0);
-      const daysUntilDeadline = Math.ceil(
-        (docDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+      let matchesDeadline = true;
+      if (filterDeadline !== "all") {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const docDeadline = new Date(doc.deadline);
+        docDeadline.setHours(0, 0, 0, 0);
+        const daysUntilDeadline = Math.ceil(
+          (docDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+        );
+
+        if (filterDeadline === "overdue") matchesDeadline = daysUntilDeadline < 0;
+        else if (filterDeadline === "today")
+          matchesDeadline = daysUntilDeadline === 0;
+        else if (filterDeadline === "this-week")
+          matchesDeadline = daysUntilDeadline >= 0 && daysUntilDeadline <= 7;
+        else if (filterDeadline === "upcoming")
+          matchesDeadline = daysUntilDeadline > 7;
+      }
+
+      return (
+        matchesSearch && matchesDocType && matchesAssignment && matchesDeadline
       );
-
-      if (filterDeadline === "overdue") matchesDeadline = daysUntilDeadline < 0;
-      else if (filterDeadline === "today")
-        matchesDeadline = daysUntilDeadline === 0;
-      else if (filterDeadline === "this-week")
-        matchesDeadline = daysUntilDeadline >= 0 && daysUntilDeadline <= 7;
-      else if (filterDeadline === "upcoming")
-        matchesDeadline = daysUntilDeadline > 7;
-    }
-
-    return (
-      matchesSearch && matchesDocType && matchesAssignment && matchesDeadline
-    );
-  });
+    })
+    .sort((a, b) => getDocumentCreatedTime(b) - getDocumentCreatedTime(a));
 
   const activeNotifications = notifications.filter(
     (note) => !readNotificationIds.includes(note.id),
@@ -1611,7 +1623,7 @@ export default function Dashboard() {
                         >
                           <SelectTrigger
                             onClick={(e) => e.stopPropagation()}
-                            className={`rounded-full border ${statusColor.border} bg-white text-left px-3 py-1.5 h-9 inline-flex items-center gap-2 w-fit min-w-[10rem]`}
+                            className={`rounded-full border ${statusColor.border} ${statusColor.bg} text-left px-3 py-1.5 h-9 inline-flex items-center gap-2 w-fit min-w-[10rem]`}
                           >
                             <StatusIcon
                               className={`w-4 h-4 ${statusColor.text}`}
