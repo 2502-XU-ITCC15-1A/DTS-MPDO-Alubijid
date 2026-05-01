@@ -125,7 +125,6 @@ export async function getDocuments(): Promise<Document[]> {
         revisionComments:
         doc.revision_comments ??
         doc.routing_slip?.revision_comments ??
-        doc.routing_slip?.remarks ??
         "",
         createdAt: doc.created_at,
         updatedAt: doc.updated_at,
