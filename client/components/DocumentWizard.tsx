@@ -176,17 +176,17 @@ export default function DocumentWizard({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 bg-black/50 flex items-stretch justify-center p-0 sm:items-center sm:p-4 z-50"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white w-full max-w-2xl max-h-[100dvh] overflow-y-auto rounded-none sm:max-h-[90vh] sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-primary to-secondary text-white p-6 flex justify-between items-center">
+        <div className="sticky top-0 bg-gradient-to-r from-primary to-secondary text-white p-4 sm:p-6 flex justify-between items-center gap-3">
           <div>
-            <h3 className="text-2xl font-bold">Add New Document</h3>
+            <h3 className="text-xl sm:text-2xl font-bold">Add New Document</h3>
             <p className="text-white/80 text-sm mt-1">
               Step {currentStep} of 3
             </p>
@@ -200,7 +200,7 @@ export default function DocumentWizard({
         </div>
 
         {/* Progress Bar */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4">
           <div className="flex gap-2">
             {[1, 2, 3].map((step) => (
               <div key={step} className="flex-1 flex items-center gap-2">
@@ -209,7 +209,7 @@ export default function DocumentWizard({
                     step <= currentStep ? "bg-primary" : "bg-gray-300"
                   }`}
                 />
-                <span className="text-sm font-medium text-gray-700">
+                <span className="hidden text-sm font-medium text-gray-700 sm:inline">
                   Step {step}
                 </span>
               </div>
@@ -218,7 +218,7 @@ export default function DocumentWizard({
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-5">
+        <div className="p-4 sm:p-6 space-y-5">
           {/* Step 1: Document Details */}
           {currentStep === 1 && (
             <div className="space-y-4">
@@ -830,7 +830,7 @@ export default function DocumentWizard({
         </div>
 
         {/* Navigation Buttons */}
-        <div className="border-t border-gray-200 p-6 flex gap-3">
+        <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 sm:p-6 flex gap-3">
           {currentStep > 1 && (
             <Button
               onClick={handleBack}
