@@ -1806,7 +1806,7 @@ export default function Dashboard() {
                 <div>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <input
-                      className="text-2xl font-bold bg-white/20 text-white placeholder-white/60 rounded px-2 py-0.5 w-full outline-none border border-white/40 focus:border-white"
+                      className="w-full max-w-md rounded border border-white/40 bg-white/20 px-3 py-1 text-xl font-bold text-white outline-none placeholder-white/60 focus:border-white"
                       value={editForm.title}
                       onChange={(e) =>
                         setEditForm({ ...editForm, title: e.target.value })
@@ -1990,15 +1990,15 @@ export default function Dashboard() {
             {/* Modal Content */}
             <div className="p-6 space-y-6">
               {/* Key Information Grid */}
-              <div className="grid grid-cols-3 gap-4 items-start">
-                <div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-start">
+                <div className="min-w-0">
                   <p className="text-xs text-gray-500 uppercase font-semibold">
                     Type
                   </p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <div className="mt-1">
                       <select
-                        className="text-base font-medium text-gray-900 px-2 py-1 border border-gray-300 rounded w-full"
+                        className="h-9 w-full truncate rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
                         value={editForm.documentType || ""}
                         onChange={(e) =>
                           setEditForm({
@@ -2061,14 +2061,14 @@ export default function Dashboard() {
                     </p>
                   )}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs text-gray-500 uppercase font-semibold">
                     Source
                   </p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <div className="mt-1">
                       <select
-                        className="text-base font-medium text-gray-900 px-2 py-1 border border-gray-300 rounded w-full"
+                        className="h-9 w-full truncate rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
                         value={editForm.source || ""}
                         onChange={(e) =>
                           setEditForm({ ...editForm, source: e.target.value })
@@ -2117,7 +2117,7 @@ export default function Dashboard() {
                   )}
                 </div>
                 {/* QR Code — spans 2 rows */}
-                <div className="row-span-2 flex flex-col items-center justify-center">
+                <div className="row-span-2 flex w-36 flex-col items-center justify-center justify-self-center sm:justify-self-end">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -2128,7 +2128,7 @@ export default function Dashboard() {
                   >
                     <QRCodeSVG
                       value={`${window.location.origin}/dashboard?doc=${selectedDoc.id}`}
-                      size={200}
+                      size={128}
                       level="M"
                       className="rounded"
                     />
@@ -2137,13 +2137,13 @@ export default function Dashboard() {
                     Tap to expand
                   </p>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs text-gray-500 uppercase font-semibold">
                     Assigned To
                   </p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <select
-                      className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
+                      className="mt-1 h-9 w-full truncate rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
                       value={editForm.assignedTo || ""}
                       onChange={(e) =>
                         setEditForm({ ...editForm, assignedTo: e.target.value })
@@ -2167,14 +2167,14 @@ export default function Dashboard() {
                     </p>
                   )}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs text-gray-500 uppercase font-semibold">
                     Deadline
                   </p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <input
                       type="date"
-                      className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
+                      className="mt-1 h-9 w-full rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
                       value={editForm.deadline || ""}
                       onChange={(e) =>
                         setEditForm({ ...editForm, deadline: e.target.value })
@@ -2191,13 +2191,13 @@ export default function Dashboard() {
               {/* Destination field - only for outgoing documents (LGU Office source) */}
               {(editForm.source === "LGU Office" ||
                 selectedDoc.destination) && (
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs text-gray-500 uppercase font-semibold">
                     Destination
                   </p>
                   {user?.role === "admin" && docViewMode === "edit" ? (
                     <select
-                      className="text-base font-medium text-gray-900 mt-1 px-2 py-1 border border-gray-300 rounded w-full"
+                      className="mt-1 h-9 w-full truncate rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
                       value={editForm.destination || ""}
                       onChange={(e) =>
                         setEditForm({

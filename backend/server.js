@@ -48,6 +48,7 @@ app.get("/api/ping", (_req, res) => {
   res.json({ message: process.env.PING_MESSAGE || "pong" });
 });
 
+<<<<<<< HEAD
 app.post("/api/user/update-profile", async (req, res) => {
   const { id, name, department, personal_email } = req.body;
   if (!id || !name) {
@@ -101,6 +102,8 @@ app.post("/api/user/change-password", async (req, res) => {
   return res.json({ success: true });
 });
 
+=======
+>>>>>>> 9fc99ade9b52fccf52c3e2e547689e467832bbf1
 // ── Get or create a folder by name inside a given parent ─────────────────────
 async function getOrCreateFolderIn(name, parentId) {
   const search = await drive.files.list({
