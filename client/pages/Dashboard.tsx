@@ -325,7 +325,37 @@ export default function Dashboard() {
   );
   const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
   const [newSourceName, setNewSourceName] = useState("");
-
+  const [showRevisionModal, setShowRevisionModal] = useState(false);
+  const [revisionComments, setRevisionComments] = useState("");
+  const [isApprovingDoc, setIsApprovingDoc] = useState(false);
+  const [isRevisingDoc, setIsRevisingDoc] = useState(false);
+  const [showCreationLoading, setShowCreationLoading] = useState(false);
+  const [creationConfirmation, setCreationConfirmation] = useState<{
+    type: "document" | "employee";
+    dtnOrName: string;
+  } | null>(null);
+  const [showNewRoutingActionInput, setShowNewRoutingActionInput] =
+    useState(false);
+  const [newRoutingActionName, setNewRoutingActionName] = useState("");
+  const [editRoutingActions, setEditRoutingActions] = useState<RoutingAction[]>(
+    [],
+  );
+  const [customRoutingActions, setCustomRoutingActions] = useState<string[]>(
+    () => JSON.parse(localStorage.getItem("customRoutingActions") || "[]"),
+  );
+    const [showRevisionPanel, setShowRevisionPanel] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [profileDepartment, setProfileDepartment] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isProfileSaving, setIsProfileSaving] = useState(false);
+  const [isPasswordChanging, setIsPasswordChanging] = useState(false);
+  const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
+  const notificationSeenRef = useRef(false);
   // Load employees and documents from Supabase on mount
   useEffect(() => {
     getEmployees().then(setEmployees).catch(console.error);
@@ -742,7 +772,8 @@ export default function Dashboard() {
         assignedTo: editForm.assignedTo,
         source: editForm.source,
         destination: editForm.destination,
-        deadline: editForm.deadline,
+        deadline: resolvedDeadline,
+        documentType: editForm.documentType,
       });
 
       // Log every field that actually changed
@@ -2527,19 +2558,18 @@ export default function Dashboard() {
                         </div>
                       </div>
 
-                      {/* Remarks */}
-                      {selectedDoc.routingSlip.remarks && (
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900 mb-2">
-                            Remarks:
-                          </p>
-                          <p className="text-sm text-gray-700 italic">
-                            {selectedDoc.routingSlip.remarks}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    {/* Remarks */}
+                    {selectedDoc.routingSlip.remarks && (
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 mb-2">
+                          Remarks:
+                        </p>
+                        <p className="text-sm text-gray-700 italic">
+                          {selectedDoc.routingSlip.remarks}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -3281,6 +3311,153 @@ export default function Dashboard() {
             setRoutingRemarks("");
           }}
         />
+      )}
+
+      {/* Revision Comments Modal */}
+      {showRevisionModal && selectedDoc && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full">
+            <div className="bg-yellow-100 border-l-4 border-yellow-500 p-6">
+              <h3 className="font-bold text-yellow-900 text-lg">
+                Revision Comments
+              </h3>
+              <p className="text-yellow-700 text-sm mt-2">
+                Document:{" "}
+                <span className="font-semibold">{selectedDoc.title}</span>
+              </p>
+        
+      {/* Creation Loading Modal */}
+      {showCreationLoading && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[80]">
+          <div className="bg-white rounded-2xl max-w-md w-full p-8 flex flex-col items-center gap-6">
+            <div className="text-center">
+              <h3 className="text-lg font-bold text-gray-900">Creating...</h3>
+              <p className="text-sm text-gray-600 mt-2">Please wait while we process your request</p>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-1 overflow-hidden">
+              <div className="bg-primary h-full animate-[loading-bar_1.2s_ease-in-out_infinite]" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Creation Confirmation Modal */}
+      {creationConfirmation && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[80]">
+          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden">
+            <div className="bg-green-100 border-l-4 border-green-500 p-6">
+              <h3 className="font-bold text-green-900 text-lg">
+                {creationConfirmation.type === "document"
+                  ? "Document Created"
+                  : "Staff Member Added"}
+              </h3>
+            </div>
+            <div className="p-8 text-center space-y-6">
+              <div className="flex justify-center">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-8 h-8 text-green-600" />
+                </div>
+              </div>
+              
+              {creationConfirmation.type === "document" ? (
+                <div>
+                  <p className="text-gray-600 text-sm mb-3">Document DTN:</p>
+                  <p className="text-2xl font-bold text-green-600 font-mono bg-green-50 px-4 py-3 rounded-lg border-2 border-green-200">
+                    {creationConfirmation.dtnOrName}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-gray-600 text-sm mb-3">Staff Member:</p>
+                  <p className="text-2xl font-bold text-green-600 bg-green-50 px-4 py-3 rounded-lg border-2 border-green-200">
+                    {creationConfirmation.dtnOrName}
+                  </p>
+                </div>
+              )}
+
+              <Button
+                onClick={() => setCreationConfirmation(null)}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Comments for Staff
+                </label>
+                <textarea
+                  value={revisionComments}
+                  onChange={(e) => setRevisionComments(e.target.value)}
+                  placeholder="Enter revision comments that will be sent back to the staff..."
+                  rows={5}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 resize-none"
+                />
+              </div>
+
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-700">
+                  <span className="font-semibold">Note:</span> These comments
+                  will be displayed to the staff member with the document when
+                  it's sent back.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => {
+                    setShowRevisionModal(false);
+                    setRevisionComments("");
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (!revisionComments.trim() || !selectedDoc) {
+                      toast.error("Please enter revision comments.");
+                      return;
+                    }
+                    setIsRevisingDoc(true);
+                    try {
+                      await reviseDocument(
+                        selectedDoc.id,
+                        revisionComments,
+                        user?.name || "Admin",
+                      );
+                      const updated = await getDocuments();
+                      setDocuments(updated);
+                      const refreshed = updated.find(
+                        (d) => d.id === selectedDoc.id,
+                      );
+                      if (refreshed) setSelectedDoc(refreshed);
+                      toast.success("Document revised and sent back to staff.");
+                      setShowRevisionModal(false);
+                      setRevisionComments("");
+                    } catch (err: any) {
+                      console.error("Failed to revise document:", err);
+                      toast.error(err.message || "Failed to revise document.");
+                    } finally {
+                      setIsRevisingDoc(false);
+                    }
+                  }}
+                  disabled={isRevisingDoc}
+                  className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isRevisingDoc ? "Sending..." : "Send Revision"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
