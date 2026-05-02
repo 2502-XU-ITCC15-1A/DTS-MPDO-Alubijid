@@ -1293,7 +1293,7 @@ export default function Dashboard() {
                     title="Employee Management"
                   >
                     <img
-                      src="/public/emp_manage_icon.svg"
+                      src="/emp_manage_icon.svg"
                       alt="Employee Management"
                       className="w-5 h-5 text-gray-600"
                     />
