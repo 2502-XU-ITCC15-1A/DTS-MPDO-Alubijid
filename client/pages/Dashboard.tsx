@@ -3152,10 +3152,17 @@ export default function Dashboard() {
                 Delete Employee
               </h3>
               <p className="text-red-700 text-sm mt-2">
-                Are you sure you want to remove {employeeToDelete.name} (
-                {employeeToDelete.email})? This will also delete their Supabase
-                authentication account.
+                Are you sure you want to remove <strong>{employeeToDelete.name}</strong> ({employeeToDelete.email})?
               </p>
+            </div>
+            <div className="px-6 pt-4 space-y-2">
+              <p className="text-sm font-semibold text-gray-700">⚠️ Please note — this action will:</p>
+              <ul className="text-sm text-gray-600 list-disc list-inside space-y-1">
+                <li>Permanently delete their account and login access</li>
+                <li>Remove all their employee records</li>
+                <li>Unassign them from any documents they are currently handling</li>
+              </ul>
+              <p className="text-sm text-red-600 font-medium pt-1">This action cannot be undone.</p>
             </div>
 
             <div className="p-6 flex gap-3">

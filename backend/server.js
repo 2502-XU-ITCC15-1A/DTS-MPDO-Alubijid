@@ -403,6 +403,12 @@ app.delete("/api/delete-employee/:id", async (req, res) => {
     }
   }
 
+  // Unassign employee from any documents before deleting to avoid FK constraint
+  await supabaseAdmin
+    .from("documents")
+    .update({ assigned_to: null })
+    .eq("assigned_to", id);
+
   const { error: deleteEmployeeError } = await supabaseAdmin
     .from("employees")
     .delete()
