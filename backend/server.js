@@ -407,7 +407,7 @@ app.delete("/api/delete-employee/:id", async (req, res) => {
   await supabaseAdmin
     .from("documents")
     .update({ assigned_to: null })
-    .eq("assigned_to", id);
+    .eq("assigned_to", employee.email);
 
   const { error: deleteEmployeeError } = await supabaseAdmin
     .from("employees")
