@@ -67,7 +67,7 @@ Key features:
 2. **Install dependencies**
 
    ```bash
-   pnpm install
+   npm install
    ```
 
 3. **Configure environment variables**
