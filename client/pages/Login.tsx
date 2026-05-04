@@ -13,7 +13,10 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [errorField, setErrorField] = useState<"email" | "password" | null>(null);
   const [loading, setLoading] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const MAX_ATTEMPTS = 4;
 
   // Forgot password modal state
   const [showForgot, setShowForgot] = useState(false);
@@ -106,13 +109,40 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setErrorField(null);
     setLoading(true);
 
     try {
+      // Step 1: Check if email is registered
+      const checkRes = await fetch(`${API}/api/check-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const checkData = await checkRes.json();
+      if (!checkData.valid) {
+        setErrorField("email");
+        setError("This email is not registered in the system. Contact your administrator.");
+        setLoading(false);
+        return;
+      }
+
+      // Step 2: Attempt login
       await login(email, password);
+      setFailedAttempts(0);
       navigate("/dashboard");
-    } catch (err) {
-      setError((err as Error).message || "Login failed. Please try again.");
+    } catch {
+      const newAttempts = failedAttempts + 1;
+      setFailedAttempts(newAttempts);
+      setErrorField("password");
+
+      const remaining = MAX_ATTEMPTS - newAttempts;
+      if (newAttempts >= MAX_ATTEMPTS) {
+        setError("Too many incorrect attempts. Opening password reset...");
+        setTimeout(() => openForgot(), 1500);
+      } else {
+        setError(`Incorrect password. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining before password reset opens.`);
+      }
     } finally {
       setLoading(false);
     }
@@ -153,9 +183,9 @@ export default function Login() {
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); setError(""); setErrorField(null); }}
                 placeholder="your.email@alubijid.gov.ph"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent transition ${errorField === "email" ? "border-red-400 bg-red-50 focus:ring-red-300" : "border-gray-300 focus:ring-primary"}`}
                 required
               />
             </div>
@@ -170,9 +200,9 @@ export default function Login() {
                   id="password"
                   type={showPassword ? "text" : "password"}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => { setPassword(e.target.value); setError(""); setErrorField(null); setFailedAttempts(0); }}
                   placeholder="••••••••"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent transition pr-10 ${errorField === "password" ? "border-red-400 bg-red-50 focus:ring-red-300" : "border-gray-300 focus:ring-primary"}`}
                   required
                 />
                 <button
