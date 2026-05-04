@@ -2992,7 +2992,7 @@ export default function Dashboard() {
                     </Button>
                     <Button
                       onClick={() => setShowDoneConfirm(true)}
-                      className="flex-1 bg-gray-400 hover:bg-gray-500 text-white font-semibold py-2"
+                      className="flex-1 bg-primary hover:bg-primary/90 text-white font-semibold py-2"
                     >
                       Mark as Done
                     </Button>
