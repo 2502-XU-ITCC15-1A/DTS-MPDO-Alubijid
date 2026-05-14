@@ -272,7 +272,7 @@ export default function Dashboard() {
   );
   const [showEmployeeMenu, setShowEmployeeMenu] = useState(false);
   const [openRoleDropdown, setOpenRoleDropdown] = useState<string | null>(null);
-  const [employeeTab, setEmployeeTab] = useState<"all" | "admin" | "staff">("all");
+  const [employeeTab, setEmployeeTab] = useState<"all" | "admin" | "head_staff" | "staff">("all");
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [showDoneConfirm, setShowDoneConfirm] = useState(false);
@@ -369,6 +369,7 @@ export default function Dashboard() {
     name: "",
     unit: "MPDC",
     designation: designationOptionsByUnit.MPDC[0],
+    role: "staff" as "admin" | "head_staff" | "staff",
   });
   const [customDocumentTypes, setCustomDocumentTypes] = useState<string[]>(() =>
     parseStoredList("customDocumentTypes"),
@@ -695,7 +696,7 @@ export default function Dashboard() {
       });
     }
 
-    if (user.role === "admin") {
+    if (user.role === "admin" || user.role === "head_staff") {
       // Each document sent for approval — listed individually
       docs
         .filter((doc) => doc.status === "Sent for approval")
@@ -871,7 +872,7 @@ export default function Dashboard() {
       const newEmployee = await addEmployee({
         email,
         name: newEmployeeData.name,
-        role: "staff",
+        role: newEmployeeData.role,
         department: newEmployeeData.designation,
       });
       setEmployees([...employees, newEmployee]);
@@ -886,6 +887,7 @@ export default function Dashboard() {
       name: "",
       unit: "MPDC",
       designation: designationOptionsByUnit.MPDC[0],
+      role: "staff",
     });
     setShowAddEmployeeModal(false);
   };
@@ -1421,8 +1423,9 @@ export default function Dashboard() {
                         {([
                           { key: "all", label: "All", count: employees.length },
                           { key: "admin", label: "Admin", count: employees.filter(e => e.role === "admin").length },
+                          { key: "head_staff", label: "Head Staff", count: employees.filter(e => e.role === "head_staff").length },
                           { key: "staff", label: "Staff", count: employees.filter(e => e.role === "staff").length },
-                        ] as { key: "all" | "admin" | "staff"; label: string; count: number }[]).map((tab) => (
+                        ] as { key: "all" | "admin" | "head_staff" | "staff"; label: string; count: number }[]).map((tab) => (
                           <button
                             key={tab.key}
                             onClick={() => setEmployeeTab(tab.key)}
@@ -1470,7 +1473,7 @@ export default function Dashboard() {
                             <select
                               value={employee.role}
                               onChange={async (e) => {
-                                const role = e.target.value as "admin" | "staff";
+                                const role = e.target.value as "admin" | "head_staff" | "staff";
                                 try {
                                   await updateEmployeeRole(employee.id, role);
                                   setEmployees((prev) =>
@@ -1485,10 +1488,13 @@ export default function Dashboard() {
                               className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border focus:outline-none focus:ring-2 focus:ring-primary/30 flex-shrink-0 cursor-pointer transition-all
                                 ${employee.role === "admin"
                                   ? "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"
+                                  : employee.role === "head_staff"
+                                  ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
                                   : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
                                 }`}
                             >
                               <option value="staff">Staff</option>
+                              <option value="head_staff">Head Staff</option>
                               <option value="admin">Admin</option>
                             </select>
 
@@ -1525,7 +1531,7 @@ export default function Dashboard() {
                 <p className="font-semibold text-gray-900 text-sm">
                   {user?.name || user?.email?.split("@")[0]}
                 </p>
-                <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
+                <p className="text-xs text-gray-500 capitalize">{user?.role === "head_staff" ? "Head Staff" : user?.role}</p>
               </div>
             </div>
           </div>
@@ -1544,7 +1550,7 @@ export default function Dashboard() {
               <div>
                 <DialogTitle className="text-lg font-semibold text-white">Edit Profile</DialogTitle>
                 <DialogDescription className="text-white/70 text-sm mt-0.5">
-                  {user?.name || user?.email?.split("@")[0]} · <span className="capitalize">{user?.role}</span>
+                  {user?.name || user?.email?.split("@")[0]} · <span className="capitalize">{user?.role === "head_staff" ? "Head Staff" : user?.role}</span>
                 </DialogDescription>
               </div>
             </div>
@@ -1804,8 +1810,8 @@ export default function Dashboard() {
                   Archived
                 </button>
               </div>
-              {/* Upload button - admin only */}
-              {user?.role === "admin" && (
+              {/* Upload button - admin, head staff, and staff */}
+              {(
                 <Button
                   onClick={() => setShowUploadModal(true)}
                   className="bg-primary hover:bg-primary/90 text-white flex gap-2 w-full sm:w-auto justify-center"
@@ -1831,8 +1837,8 @@ export default function Dashboard() {
               </div>
 
               {/* Document Type Filter */}
-              {/* Assignment Filter - admin only */}
-              {user?.role === "admin" && (
+              {/* Assignment Filter - admin and head staff */}
+              {(user?.role === "admin" || user?.role === "head_staff") && (
                 <select
                   value={filterAssignedTo}
                   onChange={(e) => setFilterAssignedTo(e.target.value)}
@@ -1849,8 +1855,8 @@ export default function Dashboard() {
                 </select>
               )}
 
-              {/* Deadline Filter - admin only */}
-              {user?.role === "admin" && (
+              {/* Deadline Filter - admin and head staff */}
+              {(user?.role === "admin" || user?.role === "head_staff") && (
                 <select
                   value={filterDeadline}
                   onChange={(e) => setFilterDeadline(e.target.value)}
@@ -1909,9 +1915,9 @@ export default function Dashboard() {
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
-                          <h4 className="text-base sm:text-lg font-semibold text-gray-900 break-words sm:truncate">
+                          <p className="text-base sm:text-lg font-semibold text-gray-900 break-words sm:truncate">
                             {doc.title}
-                          </h4>
+                          </p>
                           <span className="text-xs font-mono bg-green-100 px-2 py-1 rounded text-green-700 whitespace-nowrap font-semibold">
                             {doc.id}
                           </span>
@@ -1992,8 +1998,8 @@ export default function Dashboard() {
                             })}
                           </SelectContent>
                         </Select>
-                        {/* Document Actions Menu - admin only */}
-                        {user?.role === "admin" && (
+                        {/* Document Actions Menu - admin and head staff */}
+                        {(user?.role === "admin" || user?.role === "head_staff") && (
                           <div className="relative">
                             <button
                               onClick={(e) => {
@@ -2113,7 +2119,7 @@ export default function Dashboard() {
                     </div>
                   )}
                   <p className="text-white/80 text-sm mt-1">{selectedDoc.id}</p>
-                  {user?.role === "admin" && !editingTitle && (
+                  {(user?.role === "admin" || user?.role === "head_staff") && !editingTitle && (
                     <p className="text-white/70 text-xs mt-2">
                       Mode:{" "}
                       <span className="font-semibold capitalize">
@@ -2123,8 +2129,8 @@ export default function Dashboard() {
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  {/* Action buttons - admin only, visible in both modes */}
-                  {user?.role === "admin" && (
+                  {/* Action buttons - admin and head staff, visible in both modes */}
+                  {(user?.role === "admin" || user?.role === "head_staff") && (
                     <>
                       <button
                         onClick={(e) => {
@@ -2218,7 +2224,7 @@ export default function Dashboard() {
                   <p className="text-xs text-gray-500 uppercase font-semibold">
                     Type
                   </p>
-                  {user?.role === "admin" && docViewMode === "edit" ? (
+                  {(user?.role === "admin" || user?.role === "head_staff") && docViewMode === "edit" ? (
                     <div className="mt-1">
                       <select
                         className="h-9 w-full truncate rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
@@ -2288,7 +2294,7 @@ export default function Dashboard() {
                   <p className="text-xs text-gray-500 uppercase font-semibold">
                     Source
                   </p>
-                  {user?.role === "admin" && docViewMode === "edit" ? (
+                  {(user?.role === "admin" || user?.role === "head_staff") && docViewMode === "edit" ? (
                     <div className="mt-1">
                       <select
                         className="h-9 w-full truncate rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
@@ -2364,7 +2370,7 @@ export default function Dashboard() {
                   <p className="text-xs text-gray-500 uppercase font-semibold">
                     Assigned To
                   </p>
-                  {user?.role === "admin" && docViewMode === "edit" ? (
+                  {(user?.role === "admin" || user?.role === "head_staff") && docViewMode === "edit" ? (
                     <select
                       className="mt-1 h-9 w-full truncate rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
                       value={editForm.assignedTo || ""}
@@ -2394,7 +2400,7 @@ export default function Dashboard() {
                   <p className="text-xs text-gray-500 uppercase font-semibold">
                     Deadline
                   </p>
-                  {user?.role === "admin" && docViewMode === "edit" ? (
+                  {(user?.role === "admin" || user?.role === "head_staff") && docViewMode === "edit" ? (
                     <input
                       type="date"
                       className="mt-1 h-9 w-full rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
@@ -2418,7 +2424,7 @@ export default function Dashboard() {
                   <p className="text-xs text-gray-500 uppercase font-semibold">
                     Destination
                   </p>
-                  {user?.role === "admin" && docViewMode === "edit" ? (
+                  {(user?.role === "admin" || user?.role === "head_staff") && docViewMode === "edit" ? (
                     <select
                       className="mt-1 h-9 w-full truncate rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
                       value={editForm.destination || ""}
@@ -2528,7 +2534,7 @@ export default function Dashboard() {
                             );
                           })()}
                         </div>
-                        {user?.role === "admin" &&
+                        {(user?.role === "admin" || user?.role === "head_staff") &&
                           selectedDoc.status === "Sent for approval" &&
                           docViewMode === "view" && (
                             <>
@@ -2571,7 +2577,7 @@ export default function Dashboard() {
 
               {/* File Upload Section */}
               <div>
-                <h4 className="font-semibold text-gray-900 mb-3">Documents</h4>
+                <p className="font-semibold text-gray-900 mb-3">Documents</p>
                 <div className="space-y-3">
                   {selectedDoc.files.length === 0 ? (
                     <p className="text-sm text-gray-500">No files attached</p>
@@ -2705,9 +2711,9 @@ export default function Dashboard() {
               {/* Routing Slip Section */}
               {selectedDoc.routingSlip && (
                 <div className="border-t pt-6">
-                  <h4 className="font-semibold text-gray-900 mb-4">
+                  <p className="font-semibold text-gray-900 mb-4">
                     Routing Slip
-                  </h4>
+                  </p>
                   {docViewMode === "edit" ? (
                     <div className="bg-blue-50 p-4 rounded-lg space-y-4 border border-blue-200">
                       {/* Editable Actions */}
@@ -2912,9 +2918,9 @@ export default function Dashboard() {
                 <div className="border-t pt-6">
                   <div className="flex items-center justify-between gap-3 mb-4">
                     <div>
-                      <h4 className="font-semibold text-yellow-900">
+                      <p className="font-semibold text-yellow-900">
                         Admin Comments for Revision
-                      </h4>
+                      </p>
                       <p className="text-xs text-gray-500">
                         This document is marked as needing revision.
                       </p>
@@ -2947,9 +2953,9 @@ export default function Dashboard() {
 
               {/* Document History */}
               <div className="border-t pt-6">
-                <h4 className="font-semibold text-gray-900 mb-4">
+                <p className="font-semibold text-gray-900 mb-4">
                   Document Audit Log
-                </h4>
+                </p>
                 <div className="space-y-4">
                   {selectedDoc.history.map((entry, idx) => {
                     const action = entry.action?.toLowerCase() ?? "";
@@ -2990,8 +2996,8 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Admin-only Archive Button - for Completed documents */}
-              {user?.role === "admin" && selectedDoc.status === "Completed" && !selectedDoc.archived && (
+              {/* Archive Button - admin and head staff */}
+              {(user?.role === "admin" || user?.role === "head_staff") && selectedDoc.status === "Completed" && !selectedDoc.archived && (
                 <div className="border-t pt-6">
                   <Button
                     onClick={async () => {
@@ -3571,6 +3577,26 @@ export default function Dashboard() {
                       </option>
                     ),
                   )}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Role
+                </label>
+                <select
+                  value={newEmployeeData.role}
+                  onChange={(e) =>
+                    setNewEmployeeData({
+                      ...newEmployeeData,
+                      role: e.target.value as "admin" | "head_staff" | "staff",
+                    })
+                  }
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
+                >
+                  <option value="staff">Staff</option>
+                  <option value="head_staff">Head Staff</option>
+                  <option value="admin">Admin</option>
                 </select>
               </div>
 

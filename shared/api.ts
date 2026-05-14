@@ -13,7 +13,7 @@ export interface Employee {
   id: string;
   email: string;
   name: string;
-  role: "admin" | "staff";
+  role: "admin" | "head_staff" | "staff";
   department: string;
 }
 

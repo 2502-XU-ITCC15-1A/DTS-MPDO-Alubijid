@@ -3,6 +3,16 @@ import { Employee, Document, RoutingAction } from "@shared/api";
 
 const API = import.meta.env.VITE_API_URL ?? "";
 
+// Returns the current user's JWT for authenticated backend requests
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
 // ── Employees ─────────────────────────────────────────────────────────────────
 
 export async function getEmployees(): Promise<Employee[]> {
@@ -23,7 +33,7 @@ export async function addEmployee(
   return data;
 }
 
-export async function updateEmployeeRole(id: string, role: "admin" | "staff") {
+export async function updateEmployeeRole(id: string, role: "admin" | "head_staff" | "staff") {
   const { error } = await supabase
     .from("employees")
     .update({ role })
@@ -36,9 +46,7 @@ export async function deleteEmployee(id: string) {
     `${API}/api/delete-employee/${encodeURIComponent(id)}`,
     {
       method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: await getAuthHeaders(),
     },
   );
 
@@ -58,9 +66,7 @@ export async function updateEmployeeProfile(
 ) {
   const response = await fetch(`${API}/api/user/update-profile`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: await getAuthHeaders(),
     body: JSON.stringify({ id, name, department, personal_email }),
   });
 
@@ -75,9 +81,7 @@ export async function updateEmployeeProfile(
 export async function changeUserPassword(email: string, newPassword: string) {
   const response = await fetch(`${API}/api/user/change-password`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: await getAuthHeaders(),
     body: JSON.stringify({ email, newPassword }),
   });
 
@@ -230,6 +234,7 @@ export async function deleteDocument(id: string) {
   // Delete the Google Drive folder and all files inside it
   const driveRes = await fetch(`${API}/api/delete-folder/${encodeURIComponent(id)}`, {
     method: "DELETE",
+    headers: await getAuthHeaders(),
   });
   if (!driveRes.ok) {
     const err = await driveRes.json().catch(() => ({}));
@@ -247,7 +252,7 @@ export async function deleteDocument(id: string) {
 export async function archiveDocument(documentId: string, archivedDate?: Date) {
   const res = await fetch(`${API}/api/archive-document`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await getAuthHeaders(),
     body: JSON.stringify({ documentId, archivedDate: (archivedDate ?? new Date()).toISOString() }),
   });
   if (!res.ok) {
@@ -295,7 +300,7 @@ export async function uploadFile(
 
   const res = await fetch(`${API}/api/upload`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await getAuthHeaders(),
     body: JSON.stringify({
       documentId,
       fileName: file.name,

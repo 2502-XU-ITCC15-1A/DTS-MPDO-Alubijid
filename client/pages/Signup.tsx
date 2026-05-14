@@ -5,6 +5,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { FileText, Eye, EyeOff, CheckCircle } from "lucide-react";
 
+
 export default function Signup() {
   const navigate = useNavigate();
 
@@ -18,6 +19,7 @@ export default function Signup() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   // Step 1 — Verify if email was registered by admin
   const handleVerifyEmail = async () => {
@@ -50,7 +52,7 @@ export default function Signup() {
     if (!name.trim()) return setError("Please enter your full name.");
     if (!personalEmail.trim()) return setError("Please enter your personal email.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personalEmail)) return setError("Please enter a valid personal email address.");
-    if (password.length < 6) return setError("Password must be at least 6 characters.");
+    if (password.length < 8) return setError("Password must be at least 8 characters.");
     if (password !== confirmPassword) return setError("Passwords do not match.");
     setError("");
     setLoading(true);
@@ -62,7 +64,7 @@ export default function Signup() {
       });
       const data = await res.json();
       if (!res.ok) return setError(data.error || "Failed to create account.");
-      navigate("/login?registered=true");
+      setShowSuccess(true);
     } catch {
       setError("Cannot connect to backend. Make sure the backend is running.");
     } finally {
@@ -245,6 +247,32 @@ export default function Signup() {
           </p>
         </div>
       </div>
+
+      {/* Registration Success Popup */}
+      {showSuccess && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
+            <div className="bg-gradient-to-br from-green-500 to-green-600 p-8 flex flex-col items-center text-center">
+              <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mb-4">
+                <CheckCircle className="w-12 h-12 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-white">You're Registered!</h3>
+              <p className="text-white/80 text-sm mt-2">Your account has been successfully created.</p>
+            </div>
+            <div className="p-6 text-center space-y-4">
+              <p className="text-gray-600 text-sm">
+                Welcome, <span className="font-semibold text-gray-900">{name}</span>! You can now sign in using your credentials.
+              </p>
+              <Button
+                onClick={() => navigate("/login")}
+                className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-3"
+              >
+                Go to Sign In
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

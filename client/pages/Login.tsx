@@ -86,7 +86,7 @@ export default function Login() {
   };
 
   const handleResetPassword = async () => {
-    if (forgotPassword.length < 6) return setForgotError("Password must be at least 6 characters.");
+    if (forgotPassword.length < 8) return setForgotError("Password must be at least 8 characters.");
     if (forgotPassword !== forgotConfirm) return setForgotError("Passwords do not match.");
     setForgotError("");
     setForgotLoading(true);
@@ -94,7 +94,7 @@ export default function Login() {
       const res = await fetch(`${API}/api/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resetToken: forgotToken, password: forgotPassword }),
+        body: JSON.stringify({ resetToken: forgotToken, password: forgotPassword, email: forgotEmail.trim() }),
       });
       const data = await res.json();
       if (!res.ok) return setForgotError(data.error || "Failed to reset password.");
@@ -458,7 +458,7 @@ export default function Login() {
               {forgotStep === "done" && (
                 <div className="text-center py-4">
                   <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                  <h4 className="text-xl font-bold text-gray-900 mb-2">Password Reset!</h4>
+                  <p className="text-xl font-bold text-gray-900 mb-2">Password Reset!</p>
                   <p className="text-gray-600 mb-6">Your password has been updated successfully. You can now sign in with your new password.</p>
                   <Button
                     className="w-full bg-primary hover:bg-primary/90 text-white"

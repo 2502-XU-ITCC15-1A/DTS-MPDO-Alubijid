@@ -222,9 +222,9 @@ export default function DocumentWizard({
           {/* Step 1: Document Details */}
           {currentStep === 1 && (
             <div className="space-y-4">
-              <h4 className="font-semibold text-gray-900 mb-4">
+              <p className="font-semibold text-gray-900 mb-4">
                 Document Details
-              </h4>
+              </p>
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Document Title <span className="text-red-500">*</span>
@@ -524,9 +524,9 @@ export default function DocumentWizard({
           {/* Step 2: Assignment & Routing */}
           {currentStep === 2 && (
             <div className="space-y-4">
-              <h4 className="font-semibold text-gray-900 mb-4">
+              <p className="font-semibold text-gray-900 mb-4">
                 Assignment & Routing
-              </h4>
+              </p>
 
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
@@ -729,9 +729,9 @@ export default function DocumentWizard({
           {/* Step 3: Review & Confirm */}
           {currentStep === 3 && (
             <div className="space-y-4">
-              <h4 className="font-semibold text-gray-900 mb-4">
+              <p className="font-semibold text-gray-900 mb-4">
                 Review & Confirm
-              </h4>
+              </p>
               <div className="bg-gray-50 rounded-lg p-4 space-y-3 border border-gray-200">
                 <div className="border-b pb-3">
                   <p className="text-xs text-gray-500 uppercase font-semibold">
