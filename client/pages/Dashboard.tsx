@@ -2225,30 +2225,34 @@ export default function Dashboard() {
                                   <Eye className="w-4 h-4" />
                                   View
                                 </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedDoc(doc);
-                                    setDocViewMode("edit");
-                                    setOpenMenuDocId(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700 text-sm font-medium flex items-center gap-2"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDeletingDocId(doc.id);
-                                    setShowDeleteConfirm(true);
-                                    setOpenMenuDocId(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 text-sm font-medium flex items-center gap-2"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  Delete
-                                </button>
+                                {!doc.archived && !["Approved", "Released", "Completed"].includes(doc.status) && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedDoc(doc);
+                                      setDocViewMode("edit");
+                                      setOpenMenuDocId(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700 text-sm font-medium flex items-center gap-2"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                    Edit
+                                  </button>
+                                )}
+                                {!doc.archived && !["Approved", "Released", "Completed"].includes(doc.status) && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDeletingDocId(doc.id);
+                                      setShowDeleteConfirm(true);
+                                      setOpenMenuDocId(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 text-sm font-medium flex items-center gap-2"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    Delete
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>
@@ -2327,7 +2331,7 @@ export default function Dashboard() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                   {/* Action buttons - admin and head staff, visible in both modes */}
-                  {(user?.role === "admin" || user?.role === "head_staff") && (
+                  {(user?.role === "admin" || user?.role === "head_staff") && !selectedDoc.archived && !["Approved", "Released", "Completed"].includes(selectedDoc.status) && (
                     <>
                       <button
                         onClick={(e) => {
