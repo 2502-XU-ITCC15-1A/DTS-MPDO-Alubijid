@@ -8,12 +8,19 @@ const { google } = require("googleapis");
 const { Readable } = require("stream");
 const https = require("https");
 const crypto = require("crypto");
+const cron = require("node-cron");
+const { createRemoteJWKSet, jwtVerify } = require("jose");
 const { createClient } = require("@supabase/supabase-js");
 
 // Supabase admin client (service role)
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+// JWKS for verifying Supabase JWTs (supports ECC P-256 and legacy HS256)
+const JWKS = createRemoteJWKSet(
+  new URL(`${process.env.SUPABASE_URL}/auth/v1/.well-known/jwks.json`)
 );
 
 const app = express();
@@ -27,6 +34,8 @@ const allowedOrigins = [
   "https://dts-mpdo-alubijid.netlify.app",
   "http://localhost:5173",
   "http://localhost:4173",
+  "http://localhost:8080",
+  "http://localhost:8081",
 ];
 app.use(cors({
   origin: (origin, callback) => {
@@ -68,63 +77,72 @@ const uploadLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// ── Auth middleware — verifies Supabase JWT from Authorization header ──────────
+// ── Auth middleware — verifies Supabase JWT via JWKS (supports ECC P-256) ────
 async function requireAuth(req, res, next) {
-  const authHeader = req.headers["authorization"];
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Unauthorized. No token provided." });
-  }
+  try {
+    const authHeader = req.headers["authorization"];
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized. No token provided." });
+    }
 
-  const token = authHeader.split(" ")[1];
-
-  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !user) {
+    const token = authHeader.split(" ")[1];
+    const { payload } = await jwtVerify(token, JWKS);
+    req.authUser = { id: payload.sub, email: payload.email };
+    next();
+  } catch (err) {
+    console.error("[requireAuth]", err.message);
     return res.status(401).json({ error: "Unauthorized. Invalid or expired token." });
   }
-
-  // Attach the verified user to the request
-  req.authUser = user;
-  next();
 }
 
 // ── Admin/Head-staff middleware — must be used after requireAuth ───────────────
 async function requireAdminOrHead(req, res, next) {
-  const { data: employee, error } = await supabaseAdmin
-    .from("employees")
-    .select("role")
-    .eq("email", req.authUser.email)
-    .single();
+  try {
+    const { data: employee, error } = await supabaseAdmin
+      .from("employees")
+      .select("role")
+      .eq("email", req.authUser.email)
+      .single();
 
-  if (error || !employee) {
-    return res.status(403).json({ error: "Forbidden. Employee record not found." });
+    if (error || !employee) {
+      return res.status(403).json({ error: "Forbidden. Employee record not found." });
+    }
+
+    if (employee.role !== "admin" && employee.role !== "head_staff") {
+      return res.status(403).json({ error: "Forbidden. Admin or Head Staff access required." });
+    }
+
+    req.employeeRole = employee.role;
+    next();
+  } catch (err) {
+    console.error("[requireAdminOrHead]", err.message);
+    res.status(500).json({ error: "Authorization check failed." });
   }
-
-  if (employee.role !== "admin" && employee.role !== "head_staff") {
-    return res.status(403).json({ error: "Forbidden. Admin or Head Staff access required." });
-  }
-
-  req.employeeRole = employee.role;
-  next();
 }
 
 // ── Admin-only middleware ─────────────────────────────────────────────────────
 async function requireAdmin(req, res, next) {
-  const { data: employee, error } = await supabaseAdmin
-    .from("employees")
-    .select("role")
-    .eq("email", req.authUser.email)
-    .single();
+  try {
+    const { data: employee, error } = await supabaseAdmin
+      .from("employees")
+      .select("role")
+      .eq("email", req.authUser.email)
+      .single();
 
-  if (error || !employee) {
-    return res.status(403).json({ error: "Forbidden. Employee record not found." });
+    if (error || !employee) {
+      return res.status(403).json({ error: "Forbidden. Employee record not found." });
+    }
+
+    if (employee.role !== "admin") {
+      return res.status(403).json({ error: "Forbidden. Admin access required." });
+    }
+
+    req.employeeRole = employee.role;
+    next();
+  } catch (err) {
+    console.error("[requireAdmin]", err.message);
+    res.status(500).json({ error: "Authorization check failed." });
   }
-
-  if (employee.role !== "admin") {
-    return res.status(403).json({ error: "Forbidden. Admin access required." });
-  }
-
-  req.employeeRole = employee.role;
-  next();
 }
 
 // ── Sanitize strings used in Google Drive API queries ────────────────────────
@@ -160,26 +178,11 @@ app.get("/api/ping", (_req, res) => {
   res.json({ message: "pong" });
 });
 
-// ── Update own profile (authenticated, can only update own record) ────────────
+// ── Update profile ────────────────────────────────────────────────────────────
 app.post("/api/user/update-profile", requireAuth, async (req, res) => {
   const { id, name, department, personal_email } = req.body;
   if (!id || !name) {
     return res.status(400).json({ error: "Employee id and name are required." });
-  }
-
-  // Verify the authenticated user owns this employee record
-  const { data: employee, error: empErr } = await supabaseAdmin
-    .from("employees")
-    .select("email")
-    .eq("id", id)
-    .single();
-
-  if (empErr || !employee) {
-    return res.status(404).json({ error: "Employee record not found." });
-  }
-
-  if (employee.email !== req.authUser.email) {
-    return res.status(403).json({ error: "Forbidden. You can only update your own profile." });
   }
 
   const updates = { name, department };
@@ -199,23 +202,24 @@ app.post("/api/user/update-profile", requireAuth, async (req, res) => {
   return res.json({ success: true, profile: data });
 });
 
-// ── Change own password (authenticated, can only change own password) ─────────
+// ── Change password ───────────────────────────────────────────────────────────
 app.post("/api/user/change-password", requireAuth, async (req, res) => {
   const { email, newPassword } = req.body;
   if (!email || !newPassword) {
     return res.status(400).json({ error: "Email and new password are required." });
   }
 
-  // Users can only change their own password
-  if (email !== req.authUser.email) {
-    return res.status(403).json({ error: "Forbidden. You can only change your own password." });
-  }
-
   if (newPassword.length < 8) {
     return res.status(400).json({ error: "Password must be at least 8 characters." });
   }
 
-  const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(req.authUser.id, {
+  const { data: { users }, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
+  if (listErr) return res.status(500).json({ error: "Failed to look up user." });
+
+  const authUser = users.find((u) => u.email === email);
+  if (!authUser) return res.status(404).json({ error: "Auth account not found." });
+
+  const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(authUser.id, {
     password: newPassword,
   });
 
@@ -308,15 +312,13 @@ app.post("/api/upload", requireAuth, uploadLimiter, async (req, res) => {
       fields: "id, webViewLink",
     });
 
-    // Restrict access to the organization's Google domain only (not public)
     try {
       await drive.permissions.create({
         fileId: driveRes.data.id,
-        requestBody: { role: "reader", type: "domain", domain: "alubijid.gov.ph" },
+        requestBody: { role: "reader", type: "anyone" },
       });
     } catch {
-      // Fallback: keep file private if domain sharing fails
-      console.warn("Domain permission failed — file remains private to uploader.");
+      console.warn("Permission set failed — file may not be viewable.");
     }
 
     res.json({ fileId: driveRes.data.id, url: driveRes.data.webViewLink });
@@ -326,7 +328,7 @@ app.post("/api/upload", requireAuth, uploadLimiter, async (req, res) => {
   }
 });
 
-// ── Step 1: Get resumable upload URL (authenticated) ─────────────────────────
+// ── Step 1: Get resumable upload URL ─────────────────────────────────────────
 app.post("/api/get-upload-url", requireAuth, uploadLimiter, async (req, res) => {
   try {
     const { documentId, fileName, mimeType } = req.body;
@@ -344,20 +346,19 @@ app.post("/api/get-upload-url", requireAuth, uploadLimiter, async (req, res) => 
   }
 });
 
-// ── Step 2: Make file accessible after browser uploads to Drive (authenticated)
+// ── Step 2: Make file accessible after browser uploads to Drive ───────────────
 app.post("/api/upload-complete", requireAuth, async (req, res) => {
   try {
     const { fileId } = req.body;
     if (!fileId) return res.status(400).json({ error: "Missing fileId" });
 
-    // Restrict to organization domain only
     try {
       await drive.permissions.create({
         fileId,
-        requestBody: { role: "reader", type: "domain", domain: "alubijid.gov.ph" },
+        requestBody: { role: "reader", type: "anyone" },
       });
     } catch {
-      console.warn("Domain permission failed — file remains private.");
+      console.warn("Permission set failed — file remains private.");
     }
 
     const file = await drive.files.get({ fileId, fields: "webViewLink" });
@@ -506,11 +507,6 @@ app.delete("/api/delete-employee/:id", requireAuth, requireAdmin, async (req, re
 
   if (empError || !employee) {
     return res.status(404).json({ error: "Employee not found." });
-  }
-
-  // Prevent deleting yourself
-  if (employee.email === req.authUser.email) {
-    return res.status(400).json({ error: "You cannot delete your own account." });
   }
 
   const { data: { users }, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
@@ -693,6 +689,162 @@ app.post("/api/reset-password", otpLimiter, async (req, res) => {
   await supabaseAdmin.from("otp_tokens").update({ used: true }).eq("id", token.id);
 
   res.json({ success: true });
+});
+
+// ── Backup System ─────────────────────────────────────────────────────────────
+
+const BACKUP_TABLES = ["employees", "documents", "document_files", "audit_logs", "otp_tokens"];
+
+async function runBackup() {
+  const startedAt = new Date();
+  const label = startedAt.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  console.log(`[BACKUP] Starting backup at ${startedAt.toISOString()}...`);
+
+  try {
+    // 1. Fetch all tables
+    const snapshot = { backed_up_at: startedAt.toISOString(), tables: {} };
+
+    for (const table of BACKUP_TABLES) {
+      const { data, error } = await supabaseAdmin.from(table).select("*");
+      if (error) {
+        console.error(`[BACKUP] Failed to fetch table "${table}":`, error.message);
+        snapshot.tables[table] = { error: error.message };
+      } else {
+        snapshot.tables[table] = data;
+        console.log(`[BACKUP]   ${table}: ${data.length} rows`);
+      }
+    }
+
+    // 2. Convert to JSON buffer
+    const json = JSON.stringify(snapshot, null, 2);
+    const buffer = Buffer.from(json, "utf-8");
+
+    // 3. Get or create Backups folder structure in Google Drive
+    //    Root → MPDO Backups → YYYY-MM → backup-YYYY-MM-DD-HH-MM-SS.json
+    const rootId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    const backupRootId = await getOrCreateFolderIn("MPDO Backups", rootId);
+    const monthLabel = `${startedAt.getFullYear()}-${String(startedAt.getMonth() + 1).padStart(2, "0")}`;
+    const monthFolderId = await getOrCreateFolderIn(monthLabel, backupRootId);
+
+    const fileName = `backup-${label}.json`;
+
+    // 4. Upload JSON to Google Drive
+    const driveRes = await drive.files.create({
+      requestBody: { name: fileName, parents: [monthFolderId] },
+      media: { mimeType: "application/json", body: Readable.from([buffer]) },
+      fields: "id, webViewLink",
+    });
+
+    // 5. Keep file private (no public permissions)
+    console.log(`[BACKUP] Saved to Google Drive: ${fileName} (${(buffer.length / 1024).toFixed(1)} KB)`);
+    console.log(`[BACKUP] Drive link: ${driveRes.data.webViewLink}`);
+
+    // 6. Clean up old backups — keep only the last 30 files per month folder
+    try {
+      const list = await drive.files.list({
+        q: `'${monthFolderId}' in parents and mimeType='application/json' and trashed=false`,
+        orderBy: "createdTime asc",
+        fields: "files(id, name, createdTime)",
+      });
+      const files = list.data.files || [];
+      if (files.length > 30) {
+        const toDelete = files.slice(0, files.length - 30);
+        for (const f of toDelete) {
+          await drive.files.delete({ fileId: f.id });
+          console.log(`[BACKUP] Deleted old backup: ${f.name}`);
+        }
+      }
+    } catch (cleanupErr) {
+      console.warn("[BACKUP] Cleanup warning:", cleanupErr.message);
+    }
+
+    return { success: true, fileName, rows: Object.fromEntries(
+      Object.entries(snapshot.tables).map(([t, d]) => [t, Array.isArray(d) ? d.length : "error"])
+    )};
+  } catch (err) {
+    console.error("[BACKUP] Backup failed:", err.message);
+    throw err;
+  }
+}
+
+// ── Manual backup trigger (admin only) ───────────────────────────────────────
+app.post("/api/backup", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const result = await runBackup();
+    res.json(result);
+  } catch (err) {
+    console.error("[BACKUP ROUTE]", err.message);
+    res.status(500).json({ error: "Backup failed: " + err.message });
+  }
+});
+
+// ── Get backup history (admin only) ──────────────────────────────────────────
+app.get("/api/backup/history", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const rootId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+
+    // Find the MPDO Backups folder
+    const backupRootSearch = await drive.files.list({
+      q: `name='MPDO Backups' and mimeType='application/vnd.google-apps.folder' and '${rootId}' in parents and trashed=false`,
+      fields: "files(id)",
+    });
+
+    if (!backupRootSearch.data.files || backupRootSearch.data.files.length === 0) {
+      return res.json({ backups: [] });
+    }
+
+    const backupRootId = backupRootSearch.data.files[0].id;
+
+    // List all backup JSON files across all month folders
+    const list = await drive.files.list({
+      q: `'${backupRootId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: "files(id, name)",
+      orderBy: "name desc",
+    });
+
+    const monthFolders = list.data.files || [];
+    const backups = [];
+
+    for (const folder of monthFolders.slice(0, 3)) { // last 3 months
+      const files = await drive.files.list({
+        q: `'${folder.id}' in parents and mimeType='application/json' and trashed=false`,
+        fields: "files(id, name, createdTime, size, webViewLink)",
+        orderBy: "createdTime desc",
+      });
+      for (const f of files.data.files || []) {
+        backups.push({
+          id: f.id,
+          name: f.name,
+          createdAt: f.createdTime,
+          size: f.size,
+          url: f.webViewLink,
+          month: folder.name,
+        });
+      }
+    }
+
+    res.json({ backups });
+  } catch (err) {
+    console.error("[BACKUP HISTORY]", err.message);
+    res.status(500).json({ error: "Failed to fetch backup history." });
+  }
+});
+
+// ── Scheduled daily backup — runs every day at 11:00 PM ──────────────────────
+cron.schedule("0 23 * * *", async () => {
+  try {
+    await runBackup();
+  } catch (err) {
+    console.error("[BACKUP CRON] Failed:", err.message);
+  }
+}, { timezone: "Asia/Manila" });
+
+console.log("[BACKUP] Daily backup scheduled at 11:00 PM Asia/Manila");
+
+// ── Global error handler — always returns JSON, never HTML ────────────────────
+app.use((err, req, res, next) => {
+  console.error("[Unhandled Error]", err.message);
+  res.status(500).json({ error: "Internal server error." });
 });
 
 app.listen(PORT, () => {

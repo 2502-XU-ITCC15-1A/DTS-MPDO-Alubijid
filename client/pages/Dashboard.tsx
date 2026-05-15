@@ -70,7 +70,10 @@ import {
   Lock,
   Mail,
   Building2,
+  DatabaseBackup,
 } from "lucide-react";
+
+const API = import.meta.env.VITE_API_URL ?? "";
 
 const statusColors = {
   Pending: {
@@ -298,9 +301,14 @@ export default function Dashboard() {
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(
     null,
   );
+  const [selectedEmployeeInfo, setSelectedEmployeeInfo] = useState<Employee | null>(null);
   const [isDeletingEmployee, setIsDeletingEmployee] = useState(false);
   const [showApprovalWorkflow, setShowApprovalWorkflow] = useState(false);
   const [approvalRemarks, setApprovalRemarks] = useState("");
+  const [showBackupPanel, setShowBackupPanel] = useState(false);
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [backupHistory, setBackupHistory] = useState<{ id: string; name: string; createdAt: string; size: string; url: string; month: string }[]>([]);
+  const [backupResult, setBackupResult] = useState<{ success: boolean; fileName?: string; rows?: Record<string, number>; error?: string } | null>(null);
   const [filterAssignedTo, setFilterAssignedTo] = useState<string>("all");
   const [filterDeadline, setFilterDeadline] = useState<string>("all");
   const [selectedStatusFilter, setSelectedStatusFilter] =
@@ -453,26 +461,72 @@ export default function Dashboard() {
     setCustomSources(parseStoredList("customSources"));
   }, []);
 
-  // Real-time document updates via Supabase subscription
+  // Real-time updates — all tables
   useEffect(() => {
     if (!user) return;
+
+    const refreshDocs = async (currentSelected: typeof selectedDoc) => {
+      const updated = await getDocuments();
+      setDocuments(updated);
+      if (currentSelected) {
+        const refreshed = updated.find((d) => d.id === currentSelected.id);
+        if (refreshed) setSelectedDoc(refreshed);
+      }
+    };
+
     const channel = supabase
-      .channel("documents-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "documents" }, async () => {
-        const updated = await getDocuments();
-        setDocuments(updated);
+      .channel("mpdo-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "documents" }, () => {
+        refreshDocs(selectedDoc);
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "audit_logs" }, async () => {
-        const updated = await getDocuments();
-        setDocuments(updated);
-        if (selectedDoc) {
-          const refreshed = updated.find((d) => d.id === selectedDoc.id);
-          if (refreshed) setSelectedDoc(refreshed);
-        }
+      .on("postgres_changes", { event: "*", schema: "public", table: "document_files" }, () => {
+        refreshDocs(selectedDoc);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "audit_logs" }, () => {
+        refreshDocs(selectedDoc);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "employees" }, async () => {
+        const updated = await getEmployees();
+        setEmployees(updated);
       })
       .subscribe();
+
     return () => { supabase.removeChannel(channel); };
   }, [user, selectedDoc]);
+
+  // Live deadline checker — runs every 60 seconds to keep notifications accurate
+  useEffect(() => {
+    if (!user) return;
+
+    const checkDeadlines = async () => {
+      // Re-fetch documents to get the freshest state
+      const fresh = await getDocuments().catch(() => null);
+      if (!fresh) return;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Find docs that just crossed their deadline since last check
+      const nowOverdue = fresh.filter((d) => {
+        if (!d.deadline || !["Pending", "Processing"].includes(d.status)) return false;
+        const dl = new Date(d.deadline);
+        dl.setHours(0, 0, 0, 0);
+        return dl < today;
+      });
+
+      if (nowOverdue.length > 0) {
+        await Promise.all(nowOverdue.map((d) => updateDocument(d.id, { status: "Overdue" })));
+        const refreshed = await getDocuments().catch(() => null);
+        if (refreshed) setDocuments(refreshed);
+      } else {
+        // No status changes — still update state so notification times recalculate
+        setDocuments([...fresh]);
+      }
+    };
+
+    const interval = window.setInterval(checkDeadlines, 60 * 1000);
+    return () => window.clearInterval(interval);
+  }, [user]);
 
   useEffect(() => {
     if (!user?.email) {
@@ -667,11 +721,14 @@ export default function Dashboard() {
           deadlineDiff <= DAY_MS &&
           !["Completed", "Released", "Approved"].includes(doc.status)
         ) {
+          const hoursLeft = Math.floor(deadlineDiff / (60 * 60 * 1000));
+          const minutesLeft = Math.floor((deadlineDiff % (60 * 60 * 1000)) / (60 * 1000));
+          const timeLabel = hoursLeft > 0 ? `${hoursLeft}h ${minutesLeft}m` : `${minutesLeft} minute${minutesLeft !== 1 ? "s" : ""}`;
           notifications.push({
             id: `${doc.id}-deadline`,
             title: "⏰ Deadline approaching",
-            message: `"${docName}" is due within 24 hours (${doc.deadline}). Please submit it soon.`,
-            severity: "warning",
+            message: `"${docName}" is due in ${timeLabel} (${doc.deadline}). Please submit it soon.`,
+            severity: hoursLeft < 2 ? "urgent" : "warning",
             docId: doc.id,
           });
           return;
@@ -716,10 +773,16 @@ export default function Dashboard() {
         .filter((doc) => doc.status === "Overdue")
         .forEach((doc) => {
           const staffName = employees.find((e) => e.email === doc.assignedTo)?.name || doc.assignedTo || "Unassigned";
+          const daysOverdue = doc.deadline
+            ? Math.floor((now.getTime() - new Date(doc.deadline).getTime()) / DAY_MS)
+            : null;
+          const overdueLabel = daysOverdue != null && daysOverdue > 0
+            ? ` — ${daysOverdue} day${daysOverdue !== 1 ? "s" : ""} overdue`
+            : "";
           notifications.push({
             id: `${doc.id}-overdue`,
             title: "⚠️ Document overdue",
-            message: `"${doc.title || doc.id}" assigned to ${staffName} is overdue (${doc.deadline}).`,
+            message: `"${doc.title || doc.id}" assigned to ${staffName} is overdue (deadline: ${doc.deadline || "N/A"}${overdueLabel}).`,
             severity: "urgent",
             docId: doc.id,
           });
@@ -1454,20 +1517,23 @@ export default function Dashboard() {
                             key={employee.id}
                             className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition group"
                           >
-                            {/* Avatar */}
-                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                              <span className="text-xs font-semibold text-primary">
-                                {(employee.name || employee.email).charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-
-                            {/* Info */}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-800 truncate">
-                                {employee.name || "—"}
-                              </p>
-                              <p className="text-xs text-gray-400 truncate">{employee.email}</p>
-                            </div>
+                            {/* Avatar + Info — clickable */}
+                            <button
+                              onClick={() => setSelectedEmployeeInfo(employee)}
+                              className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                            >
+                              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                <span className="text-xs font-semibold text-primary">
+                                  {(employee.name || employee.email).charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-800 truncate hover:text-primary transition">
+                                  {employee.name || "—"}
+                                </p>
+                                <p className="text-xs text-gray-400 truncate">{employee.email}</p>
+                              </div>
+                            </button>
 
                             {/* Role Select */}
                             <select
@@ -1511,6 +1577,122 @@ export default function Dashboard() {
                             </button>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Backup Button - admin only */}
+              {user?.role === "admin" && (
+                <div className="relative">
+                  <button
+                    onClick={async () => {
+                      setShowBackupPanel(!showBackupPanel);
+                      if (!showBackupPanel) {
+                        try {
+                          const { data: { session } } = await supabase.auth.getSession();
+                          const res = await fetch(`${API}/api/backup/history`, {
+                            headers: { Authorization: `Bearer ${session?.access_token}` },
+                          });
+                          if (res.ok) {
+                            const data = await res.json();
+                            setBackupHistory(data.backups || []);
+                          }
+                        } catch { /* non-fatal */ }
+                      }
+                    }}
+                    className="p-2 hover:bg-primary/10 rounded-lg transition"
+                    title="Backup Data"
+                  >
+                    <DatabaseBackup className="w-5 h-5 text-primary" />
+                  </button>
+
+                  {showBackupPanel && (
+                    <div className="fixed left-3 right-3 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-96 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden">
+                      <div className="bg-gradient-to-r from-primary to-primary/80 px-4 py-3 flex justify-between items-center">
+                        <div>
+                          <h3 className="font-semibold text-white text-sm">Data Backup</h3>
+                          <p className="text-white/60 text-xs mt-0.5">Auto-backup runs daily at 11:00 PM</p>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            setIsBackingUp(true);
+                            setBackupResult(null);
+                            try {
+                              const { data: { session } } = await supabase.auth.getSession();
+                              const res = await fetch(`${API}/api/backup`, {
+                                method: "POST",
+                                headers: { Authorization: `Bearer ${session?.access_token}` },
+                              });
+                              const data = await res.json();
+                              if (res.ok) {
+                                setBackupResult({ success: true, fileName: data.fileName, rows: data.rows });
+                                const histRes = await fetch(`${API}/api/backup/history`, {
+                                  headers: { Authorization: `Bearer ${session?.access_token}` },
+                                });
+                                if (histRes.ok) {
+                                  const histData = await histRes.json();
+                                  setBackupHistory(histData.backups || []);
+                                }
+                              } else {
+                                setBackupResult({ success: false, error: data.error });
+                              }
+                            } catch (err: any) {
+                              setBackupResult({ success: false, error: err.message });
+                            } finally {
+                              setIsBackingUp(false);
+                            }
+                          }}
+                          disabled={isBackingUp}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50"
+                        >
+                          {isBackingUp ? (
+                            <><svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg> Backing up...</>
+                          ) : (
+                            <><DatabaseBackup className="w-3.5 h-3.5" /> Backup Now</>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Result message */}
+                      {backupResult && (
+                        <div className={`px-4 py-2.5 text-xs font-medium border-b ${backupResult.success ? "bg-green-50 text-green-700 border-green-100" : "bg-red-50 text-red-700 border-red-100"}`}>
+                          {backupResult.success ? (
+                            <span>✅ Saved: <span className="font-semibold">{backupResult.fileName}</span> — {Object.entries(backupResult.rows || {}).map(([t, n]) => `${t}: ${n}`).join(", ")}</span>
+                          ) : (
+                            <span>❌ {backupResult.error}</span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Backup history list */}
+                      <div className="max-h-72 overflow-y-auto divide-y divide-gray-50">
+                        {backupHistory.length === 0 ? (
+                          <p className="text-center text-gray-400 text-xs py-6">No backups yet. Click "Backup Now" to create one.</p>
+                        ) : (
+                          backupHistory.slice(0, 15).map((b) => (
+                            <div key={b.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition">
+                              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                <DatabaseBackup className="w-4 h-4 text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-gray-800 truncate">{b.name}</p>
+                                <p className="text-[10px] text-gray-400">{new Date(b.createdAt).toLocaleString()} {b.size ? `· ${(parseInt(b.size) / 1024).toFixed(1)} KB` : ""}</p>
+                              </div>
+                              {b.url && (
+                                <a
+                                  href={b.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[10px] px-2 py-1 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition flex-shrink-0"
+                                >
+                                  View
+                                </a>
+                              )}
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
                   )}
@@ -3216,6 +3398,69 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Employee Info Popup */}
+      {selectedEmployeeInfo && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+          onClick={() => setSelectedEmployeeInfo(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className={`p-6 flex flex-col items-center text-center ${
+              selectedEmployeeInfo.role === "admin"
+                ? "bg-gradient-to-br from-purple-500 to-purple-600"
+                : selectedEmployeeInfo.role === "head_staff"
+                ? "bg-gradient-to-br from-green-500 to-green-600"
+                : "bg-gradient-to-br from-primary to-primary/80"
+            }`}>
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-3">
+                <span className="text-2xl font-bold text-white">
+                  {(selectedEmployeeInfo.name || selectedEmployeeInfo.email).charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <h3 className="text-xl font-bold text-white">{selectedEmployeeInfo.name || "—"}</h3>
+              <span className="mt-2 text-xs font-semibold bg-white/20 text-white px-3 py-1 rounded-full">
+                {selectedEmployeeInfo.role === "head_staff" ? "Head Staff" : selectedEmployeeInfo.role === "admin" ? "Admin" : "Staff"}
+              </span>
+            </div>
+
+            {/* Details */}
+            <div className="p-6 space-y-3">
+              <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3">
+                <span className="text-xs font-semibold text-gray-500 w-24 flex-shrink-0">Work Email</span>
+                <span className="text-sm text-gray-800 font-medium truncate">{selectedEmployeeInfo.email}</span>
+              </div>
+              <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3">
+                <span className="text-xs font-semibold text-gray-500 w-24 flex-shrink-0">Department</span>
+                <span className="text-sm text-gray-800 font-medium">{selectedEmployeeInfo.department || "—"}</span>
+              </div>
+              <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3">
+                <span className="text-xs font-semibold text-gray-500 w-24 flex-shrink-0">Role</span>
+                <span className={`text-sm font-semibold ${
+                  selectedEmployeeInfo.role === "admin" ? "text-purple-600"
+                  : selectedEmployeeInfo.role === "head_staff" ? "text-green-600"
+                  : "text-blue-600"
+                }`}>
+                  {selectedEmployeeInfo.role === "head_staff" ? "Head Staff" : selectedEmployeeInfo.role === "admin" ? "Admin" : "Staff"}
+                </span>
+              </div>
+            </div>
+
+            <div className="px-6 pb-6">
+              <button
+                onClick={() => setSelectedEmployeeInfo(null)}
+                className="w-full py-2.5 rounded-lg border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Employee Confirmation Modal */}
       {showEmployeeDeleteConfirm && employeeToDelete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -3640,6 +3885,7 @@ export default function Dashboard() {
                       name: "",
                       unit: "MPDC",
                       designation: designationOptionsByUnit.MPDC[0],
+                      role: "staff",
                     });
                   }}
                   variant="outline"

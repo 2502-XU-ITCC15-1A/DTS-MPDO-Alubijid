@@ -113,35 +113,28 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // Step 1: Check if email is registered
-      const checkRes = await fetch(`${API}/api/check-email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      const checkData = await checkRes.json();
-      if (!checkData.valid) {
-        setErrorField("email");
-        setError("This email is not registered in the system. Contact your administrator.");
-        setLoading(false);
-        return;
-      }
-
-      // Step 2: Attempt login
+      // Attempt login directly via Supabase — no backend dependency
       await login(email, password);
       setFailedAttempts(0);
       navigate("/dashboard");
-    } catch {
+    } catch (err: any) {
       const newAttempts = failedAttempts + 1;
       setFailedAttempts(newAttempts);
-      setErrorField("password");
 
-      const remaining = MAX_ATTEMPTS - newAttempts;
-      if (newAttempts >= MAX_ATTEMPTS) {
-        setError("Too many incorrect attempts. Opening password reset...");
-        setTimeout(() => openForgot(), 1500);
+      // Distinguish between "not registered" and "wrong password"
+      const msg = err?.message || "";
+      if (msg.toLowerCase().includes("not registered") || msg.toLowerCase().includes("employee")) {
+        setErrorField("email");
+        setError("This email is not registered in the system. Contact your administrator.");
       } else {
-        setError(`Incorrect password. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining before password reset opens.`);
+        setErrorField("password");
+        const remaining = MAX_ATTEMPTS - newAttempts;
+        if (newAttempts >= MAX_ATTEMPTS) {
+          setError("Too many incorrect attempts. Opening password reset...");
+          setTimeout(() => openForgot(), 1500);
+        } else {
+          setError(`Incorrect email or password. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`);
+        }
       }
     } finally {
       setLoading(false);
