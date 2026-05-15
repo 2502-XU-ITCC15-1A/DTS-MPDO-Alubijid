@@ -603,6 +603,11 @@ export default function Dashboard() {
     setProfilePersonalEmail(user.personal_email || "");
   }, [user]);
 
+  // Sync selectedSource whenever the selected document changes
+  useEffect(() => {
+    setSelectedSource(selectedDoc ? selectedDoc.source : null);
+  }, [selectedDoc?.id]);
+
   const handleSaveProfile = async () => {
     if (!user) return;
     if (!profileName.trim()) {
@@ -1321,21 +1326,27 @@ export default function Dashboard() {
 
     let matchesDeadline = true;
     if (filterDeadline !== "all") {
+      if (!doc.deadline) {
+        matchesDeadline = false;
+      } else {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const docDeadline = new Date(doc.deadline);
       docDeadline.setHours(0, 0, 0, 0);
-      const daysUntilDeadline = Math.ceil(
+      const daysUntilDeadline = Number.isNaN(docDeadline.getTime()) ? null : Math.ceil(
         (docDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
       );
 
-      if (filterDeadline === "overdue") matchesDeadline = daysUntilDeadline < 0;
+      if (daysUntilDeadline === null) {
+        matchesDeadline = false;
+      } else if (filterDeadline === "overdue") matchesDeadline = daysUntilDeadline < 0;
       else if (filterDeadline === "today")
         matchesDeadline = daysUntilDeadline === 0;
       else if (filterDeadline === "this-week")
         matchesDeadline = daysUntilDeadline >= 0 && daysUntilDeadline <= 7;
       else if (filterDeadline === "upcoming")
         matchesDeadline = daysUntilDeadline > 7;
+      }
     }
 
     return (
@@ -1574,16 +1585,23 @@ export default function Dashboard() {
                             <select
                               value={employee.role}
                               onChange={async (e) => {
-                                const role = e.target.value as "admin" | "head_staff" | "staff";
+                                const newRole = e.target.value as "admin" | "head_staff" | "staff";
+                                const prevRole = employee.role;
+                                setEmployees((prev) =>
+                                  prev.map((emp) =>
+                                    emp.id === employee.id ? { ...emp, role: newRole } : emp,
+                                  ),
+                                );
                                 try {
-                                  await updateEmployeeRole(employee.id, role);
-                                  setEmployees((prev) =>
-                                    prev.map((emp) =>
-                                      emp.id === employee.id ? { ...emp, role } : emp,
-                                    ),
-                                  );
+                                  await updateEmployeeRole(employee.id, newRole);
                                 } catch (err) {
                                   console.error("Failed to update role:", err);
+                                  toast.error("Failed to update role. Please try again.");
+                                  setEmployees((prev) =>
+                                    prev.map((emp) =>
+                                      emp.id === employee.id ? { ...emp, role: prevRole } : emp,
+                                    ),
+                                  );
                                 }
                               }}
                               className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border focus:outline-none focus:ring-2 focus:ring-primary/30 flex-shrink-0 cursor-pointer transition-all
@@ -2275,13 +2293,7 @@ export default function Dashboard() {
         >
           <div
             className="bg-white w-full max-w-4xl max-h-[100dvh] overflow-y-auto rounded-none sm:max-h-[90dvh] sm:rounded-2xl"
-            onClick={(e) => {
-              e.stopPropagation();
-              // Initialize source when modal opens
-              if (!selectedSource) {
-                setSelectedSource(selectedDoc.source);
-              }
-            }}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
             <div className="sticky top-0 bg-gradient-to-r from-primary to-secondary text-white p-4 sm:p-6">
