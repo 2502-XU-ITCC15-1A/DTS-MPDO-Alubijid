@@ -62,11 +62,10 @@ router.post("/upload", requireAuth, uploadLimiter, async (req, res) => {
       return res.status(400).json({ error: "File type not allowed. Only PDF, Word, Excel, PowerPoint, and text documents are accepted." });
     }
 
-    if (fileBase64.length > 20 * 1024 * 1024) {
-      return res.status(400).json({ error: "File too large. Maximum size is 15MB." });
-    }
-
     const buffer = Buffer.from(fileBase64, "base64");
+    if (buffer.length > 5 * 1024 * 1024) {
+      return res.status(400).json({ error: "File too large. Maximum size is 5MB." });
+    }
     const folderId = await getOrCreateFolder(documentId);
 
     const driveRes = await drive.files.create({

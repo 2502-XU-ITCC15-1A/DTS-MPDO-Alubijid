@@ -2846,7 +2846,12 @@ export default function Dashboard() {
                     if (rejected.length > 0) {
                       toast.error(`File type not allowed: ${rejected.map((f) => f.name).join(", ")}`);
                     }
-                    setSelectedFiles(files.filter((f) => isAllowedFileType(f)));
+                    const typeAllowed = files.filter((f) => isAllowedFileType(f));
+                    const oversized = typeAllowed.filter((f) => f.size > 5 * 1024 * 1024);
+                    if (oversized.length > 0) {
+                      toast.error(`File too large (max 5MB): ${oversized.map((f) => f.name).join(", ")}`);
+                    }
+                    setSelectedFiles(typeAllowed.filter((f) => f.size <= 5 * 1024 * 1024));
                   }}
                 />
 
@@ -2866,7 +2871,7 @@ export default function Dashboard() {
                     <p className="text-sm text-gray-600">
                       Drag and drop or{" "}
                       <span className="text-primary font-medium">click to upload</span>
-                      <span className="block text-xs text-gray-400 mt-1">PDF, Word, Excel, PowerPoint, Google Docs/Sheets/Slides, CSV, TXT — max 15MB</span>
+                      <span className="block text-xs text-gray-400 mt-1">PDF, Word, Excel, PowerPoint, Google Docs/Sheets/Slides, CSV, TXT — max 5MB</span>
                     </p>
                   )}
                 </div>
