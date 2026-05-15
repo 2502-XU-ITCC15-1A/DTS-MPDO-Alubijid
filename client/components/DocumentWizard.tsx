@@ -410,26 +410,6 @@ export default function DocumentWizard({
                 )}
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Document Direction
-                </label>
-                <select
-                  value={formData.documentDirection}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      documentDirection: e.target.value as
-                        | "Incoming"
-                        | "Outgoing",
-                    })
-                  }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white"
-                >
-                  <option value="Incoming">Incoming</option>
-                  <option value="Outgoing">Outgoing</option>
-                </select>
-              </div>
 
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -813,14 +793,6 @@ export default function DocumentWizard({
                   </p>
                   <p className="text-sm font-medium text-gray-900 mt-1">
                     {formData.source || "—"}
-                  </p>
-                </div>
-                <div className="border-b pb-3">
-                  <p className="text-xs text-gray-500 uppercase font-semibold">
-                    Document Direction
-                  </p>
-                  <p className="text-sm font-medium text-gray-900 mt-1">
-                    {formData.documentDirection || "—"}
                   </p>
                 </div>
                 <div className="border-b pb-3">

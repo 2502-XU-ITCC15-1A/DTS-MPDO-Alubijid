@@ -264,9 +264,7 @@ export default function Dashboard() {
   const { user, logout, refreshUserProfile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeTab, setActiveTab] = useState<"all" | "incoming" | "outgoing" | "archived">(
-    "all",
-  );
+  const [activeTab, setActiveTab] = useState<"all" | "archived">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -1226,11 +1224,6 @@ export default function Dashboard() {
       docs = docs.filter((d) => d.archived === true);
     } else {
       docs = docs.filter((d) => !d.archived);
-      if (activeTab === "incoming") {
-        docs = docs.filter((d) => !d.destination);
-      } else if (activeTab === "outgoing") {
-        docs = docs.filter((d) => d.destination);
-      }
     }
 
     return docs;
@@ -2001,26 +1994,6 @@ export default function Dashboard() {
                   }`}
                 >
                   All
-                </button>
-                <button
-                  onClick={() => setActiveTab("incoming")}
-                  className={`pb-2 font-medium border-b-2 transition whitespace-nowrap text-sm sm:text-base ${
-                    activeTab === "incoming"
-                      ? "border-primary text-primary"
-                      : "border-transparent text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  Incoming
-                </button>
-                <button
-                  onClick={() => setActiveTab("outgoing")}
-                  className={`pb-2 font-medium border-b-2 transition whitespace-nowrap text-sm sm:text-base ${
-                    activeTab === "outgoing"
-                      ? "border-primary text-primary"
-                      : "border-transparent text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  Outgoing
                 </button>
                 <button
                   onClick={() => setActiveTab("archived")}
@@ -4002,9 +3975,6 @@ export default function Dashboard() {
                   assignedTo: wizardData.assignedTo,
                   deadline: wizardData.deadline,
                   source: wizardData.source,
-                  ...(wizardData.documentDirection === "Outgoing" && {
-                    destination: "LGU Office",
-                  }),
                   createdAt: new Date().toISOString(),
                   updatedAt: new Date().toISOString(),
                 },
