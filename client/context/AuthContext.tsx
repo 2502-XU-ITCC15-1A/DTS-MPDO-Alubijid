@@ -96,6 +96,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null);
+    // Replace entire history stack so Back button cannot return to dashboard
+    window.history.pushState(null, "", "/login");
+    window.location.replace("/login");
   };
 
   return (
