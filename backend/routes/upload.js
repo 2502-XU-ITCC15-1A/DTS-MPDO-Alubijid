@@ -1,6 +1,43 @@
 const express = require("express");
+const path = require("path");
 const { Readable } = require("stream");
 const router = express.Router();
+
+const ALLOWED_EXTENSIONS = new Set([
+  "pdf",
+  "doc", "docx", "docm", "dot", "dotx",
+  "xls", "xlsx", "xlsm", "csv",
+  "ppt", "pptx", "pptm", "pps", "ppsx",
+  "odt", "ods", "odp",
+  "txt", "rtf",
+  "gdoc", "gsheet", "gslides",
+]);
+
+const ALLOWED_MIMETYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+  "application/vnd.ms-word.document.macroEnabled.12",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel.sheet.macroEnabled.12",
+  "text/csv",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+  "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+  "application/vnd.oasis.opendocument.text",
+  "application/vnd.oasis.opendocument.spreadsheet",
+  "application/vnd.oasis.opendocument.presentation",
+  "text/plain",
+  "application/rtf",
+]);
+
+function isAllowedFile(fileName, mimeType) {
+  const ext = path.extname(fileName).replace(".", "").toLowerCase();
+  return ALLOWED_EXTENSIONS.has(ext) || ALLOWED_MIMETYPES.has(mimeType);
+}
 const { drive, oauth2Client } = require("../config/drive");
 const { requireAuth, requireAdminOrHead } = require("../middleware/auth");
 const { uploadLimiter } = require("../config/limiters");
@@ -20,6 +57,10 @@ router.post("/upload", requireAuth, uploadLimiter, async (req, res) => {
     if (!fileBase64) return res.status(400).json({ error: "No file provided" });
     if (!documentId) return res.status(400).json({ error: "No documentId provided" });
     if (!fileName) return res.status(400).json({ error: "No fileName provided" });
+
+    if (!isAllowedFile(fileName, mimeType)) {
+      return res.status(400).json({ error: "File type not allowed. Only PDF, Word, Excel, PowerPoint, and text documents are accepted." });
+    }
 
     if (fileBase64.length > 20 * 1024 * 1024) {
       return res.status(400).json({ error: "File too large. Maximum size is 15MB." });

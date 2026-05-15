@@ -3,7 +3,7 @@ import { useState } from "react";
 const API = import.meta.env.VITE_API_URL ?? "";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { FileText, Eye, EyeOff, CheckCircle } from "lucide-react";
+import { Eye, EyeOff, CheckCircle } from "lucide-react";
 
 
 export default function Signup() {
@@ -77,13 +77,11 @@ export default function Signup() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
-              <FileText className="w-7 h-7 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold text-primary">MPDO Tracker</h1>
+          <div className="flex justify-center mb-3">
+            <img src="https://xlshoeusatpnmfjzizsr.supabase.co/storage/v1/object/public/documents/mpdo-logo.png" alt="MPDO Logo" className="w-24 h-24 object-contain" />
           </div>
-          <p className="text-gray-600">Municipal Planning and Development Office</p>
+          <h1 className="text-2xl font-bold text-primary">MPDO Tracker</h1>
+          <p className="text-gray-600 mt-1">Municipal Planning and Development Office</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8">

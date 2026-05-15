@@ -59,7 +59,7 @@ import {
   QrCode,
   ScanLine,
   Plus,
-  Menu,
+  MoreVertical,
   Bell,
   Edit,
   Trash2,
@@ -390,6 +390,7 @@ export default function Dashboard() {
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [revisionComments, setRevisionComments] = useState("");
   const [isApprovingDoc, setIsApprovingDoc] = useState(false);
+  const [isSendingApproval, setIsSendingApproval] = useState(false);
   const [isRevisingDoc, setIsRevisingDoc] = useState(false);
   const [showCreationLoading, setShowCreationLoading] = useState(false);
   const [creationConfirmation, setCreationConfirmation] = useState<{
@@ -421,6 +422,49 @@ export default function Dashboard() {
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
   const notificationSeenRef = useRef(false);
+
+  // Allowed file types for upload (Microsoft Office + Google + PDF + plain text)
+  const ALLOWED_EXTENSIONS = new Set([
+    "pdf",
+    // Microsoft Word
+    "doc", "docx", "docm", "dot", "dotx",
+    // Microsoft Excel
+    "xls", "xlsx", "xlsm", "csv",
+    // Microsoft PowerPoint
+    "ppt", "pptx", "pptm", "pps", "ppsx",
+    // OpenDocument
+    "odt", "ods", "odp",
+    // Plain text / rich text
+    "txt", "rtf",
+    // Google Workspace exported formats (when downloaded)
+    "gdoc", "gsheet", "gslides",
+  ]);
+
+  const ALLOWED_MIMETYPES = new Set([
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+    "application/vnd.ms-word.document.macroEnabled.12",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel.sheet.macroEnabled.12",
+    "text/csv",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+    "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+    "application/vnd.oasis.opendocument.text",
+    "application/vnd.oasis.opendocument.spreadsheet",
+    "application/vnd.oasis.opendocument.presentation",
+    "text/plain",
+    "application/rtf",
+  ]);
+
+  function isAllowedFileType(file: File): boolean {
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    return ALLOWED_EXTENSIONS.has(ext) || ALLOWED_MIMETYPES.has(file.type);
+  }
 
   const activeNotifications = notifications.filter(
     (n) => !readNotificationIds.includes(n.id),
@@ -1332,9 +1376,7 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
-                <FileText className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
-              </div>
+              <img src="https://xlshoeusatpnmfjzizsr.supabase.co/storage/v1/object/public/documents/mpdo-logo.png" alt="MPDO Logo" className="w-8 h-8 sm:w-10 sm:h-10 object-contain" />
               <h1 className="truncate text-lg sm:text-2xl font-bold text-primary">MPDO Tracker</h1>
             </div>
             <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5 sm:gap-4">
@@ -2193,7 +2235,7 @@ export default function Dashboard() {
                               className="p-2 hover:bg-gray-200 rounded-lg transition"
                               title="More options"
                             >
-                              <Menu className="w-5 h-5 text-gray-600" />
+                              <MoreVertical className="w-5 h-5 text-gray-600" />
                             </button>
 
                             {openMenuDocId === doc.id && (
@@ -2722,6 +2764,8 @@ export default function Dashboard() {
                             <>
                               <button
                                 onClick={async () => {
+                                  if (isApprovingDoc) return;
+                                  if (selectedDoc.status !== "Sent for approval") return;
                                   setIsApprovingDoc(true);
                                   try {
                                     await approveDocument(selectedDoc.id, user?.name || "Admin", selectedDoc.status);
@@ -2737,7 +2781,7 @@ export default function Dashboard() {
                                   }
                                 }}
                                 disabled={isApprovingDoc}
-                                className="flex items-center gap-1.5 px-4 py-2 bg-green-100 hover:bg-green-200 text-green-700 border border-green-300 rounded-lg font-medium text-sm transition disabled:opacity-50 whitespace-nowrap"
+                                className="flex items-center gap-1.5 px-4 py-2 bg-green-100 hover:bg-green-200 text-green-700 border border-green-300 rounded-lg font-medium text-sm transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                               >
                                 <CheckCircle className="w-4 h-4" />
                                 {isApprovingDoc ? "Approving..." : "Approve"}
@@ -2817,9 +2861,16 @@ export default function Dashboard() {
                   ref={fileInputRef}
                   type="file"
                   className="hidden"
-                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                  accept=".pdf,.doc,.docx,.docm,.dot,.dotx,.xls,.xlsx,.xlsm,.csv,.ppt,.pptx,.pptm,.pps,.ppsx,.odt,.ods,.odp,.rtf,.txt,.gdoc,.gsheet,.gslides"
                   multiple
-                  onChange={(e) => setSelectedFiles(Array.from(e.target.files ?? []))}
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    const rejected = files.filter((f) => !isAllowedFileType(f));
+                    if (rejected.length > 0) {
+                      toast.error(`File type not allowed: ${rejected.map((f) => f.name).join(", ")}`);
+                    }
+                    setSelectedFiles(files.filter((f) => isAllowedFileType(f)));
+                  }}
                 />
 
                 {/* File Drop Zone */}
@@ -2838,7 +2889,7 @@ export default function Dashboard() {
                     <p className="text-sm text-gray-600">
                       Drag and drop or{" "}
                       <span className="text-primary font-medium">click to upload</span>
-                      <span className="block text-xs text-gray-400 mt-1">You can select multiple files</span>
+                      <span className="block text-xs text-gray-400 mt-1">PDF, Word, Excel, PowerPoint, Google Docs/Sheets/Slides, CSV, TXT — max 15MB</span>
                     </p>
                   )}
                 </div>
@@ -3220,7 +3271,9 @@ export default function Dashboard() {
                   <div className="flex gap-3">
                     <Button
                       onClick={async () => {
-                        if (!selectedDoc) return;
+                        if (!selectedDoc || isSendingApproval) return;
+                        if (selectedDoc.status === "Sent for approval") return;
+                        setIsSendingApproval(true);
                         try {
                           await sendDocumentForApproval(
                             selectedDoc.id,
@@ -3239,11 +3292,14 @@ export default function Dashboard() {
                           toast.error(
                             err.message || "Failed to send for approval.",
                           );
+                        } finally {
+                          setIsSendingApproval(false);
                         }
                       }}
-                      className="flex-1 bg-primary hover:bg-primary/90 text-white font-semibold py-2"
+                      disabled={isSendingApproval}
+                      className="flex-1 bg-primary hover:bg-primary/90 text-white font-semibold py-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Send for Admin Approval
+                      {isSendingApproval ? "Sending..." : "Send for Admin Approval"}
                     </Button>
                     <Button
                       onClick={() => setShowDoneConfirm(true)}

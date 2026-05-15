@@ -4,7 +4,7 @@ const API = import.meta.env.VITE_API_URL ?? "";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
-import { FileText, Eye, EyeOff, KeyRound, Lock, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Lock, CheckCircle2 } from "lucide-react";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -146,13 +146,11 @@ export default function Login() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
-              <FileText className="w-7 h-7 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold text-primary">Documents Tracking System</h1>
+          <div className="flex justify-center mb-3">
+            <img src="https://xlshoeusatpnmfjzizsr.supabase.co/storage/v1/object/public/documents/mpdo-logo.png" alt="MPDO Logo" className="w-36 h-36 object-contain" />
           </div>
-          <p className="text-gray-600">Municipal Planning and Development Office</p>
+          <h1 className="text-2xl font-bold text-primary">Documents Tracking System</h1>
+          <p className="text-gray-600 mt-1">Municipal Planning and Development Office</p>
         </div>
 
         {/* Login Card */}
@@ -249,38 +247,6 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Demo Info */}
-        <div className="mt-8 space-y-4">
-          {/* Admin Credentials */}
-          <div className="bg-white rounded-xl p-6 border-2 border-secondary/30">
-            <p className="text-sm text-gray-600 mb-3">
-              <span className="font-semibold text-secondary">Admin Account:</span>
-            </p>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li>
-                Email: <code className="bg-gray-100 px-2 py-1 rounded">demo@alubijid.gov.ph</code>
-              </li>
-              <li>
-                Password: <code className="bg-gray-100 px-2 py-1 rounded">demo123</code>
-              </li>
-            </ul>
-          </div>
-
-          {/* Staff Credentials */}
-          <div className="bg-white rounded-xl p-6 border-2 border-blue-200">
-            <p className="text-sm text-gray-600 mb-3">
-              <span className="font-semibold text-blue-600">Staff Account:</span>
-            </p>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li>
-                Email: <code className="bg-gray-100 px-2 py-1 rounded">staff@alubijid.gov.ph</code>
-              </li>
-              <li>
-                Password: <code className="bg-gray-100 px-2 py-1 rounded">staff123</code>
-              </li>
-            </ul>
-          </div>
-        </div>
       </div>
 
       {/* Forgot Password Modal */}

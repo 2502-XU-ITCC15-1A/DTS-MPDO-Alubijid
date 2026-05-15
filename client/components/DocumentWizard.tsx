@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Upload,
@@ -72,6 +73,42 @@ export default function DocumentWizard({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+
+  const ALLOWED_EXTENSIONS = new Set([
+    "pdf",
+    "doc", "docx", "docm", "dot", "dotx",
+    "xls", "xlsx", "xlsm", "csv",
+    "ppt", "pptx", "pptm", "pps", "ppsx",
+    "odt", "ods", "odp",
+    "txt", "rtf",
+    "gdoc", "gsheet", "gslides",
+  ]);
+
+  const ALLOWED_MIMETYPES = new Set([
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+    "application/vnd.ms-word.document.macroEnabled.12",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel.sheet.macroEnabled.12",
+    "text/csv",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+    "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+    "application/vnd.oasis.opendocument.text",
+    "application/vnd.oasis.opendocument.spreadsheet",
+    "application/vnd.oasis.opendocument.presentation",
+    "text/plain",
+    "application/rtf",
+  ]);
+
+  function isAllowedFileType(file: File): boolean {
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    return ALLOWED_EXTENSIONS.has(ext) || ALLOWED_MIMETYPES.has(file.type);
+  }
   const [customDocumentTypes, setCustomDocumentTypes] = useState<string[]>([]);
   const [customSources, setCustomSources] = useState<string[]>([]);
   const [newDocumentTypeName, setNewDocumentTypeName] = useState("");
@@ -148,13 +185,18 @@ export default function DocumentWizard({
   };
 
   const handleAddCustomSource = () => {
-    if (newSourceName.trim() && !customSources.includes(newSourceName.trim())) {
-      const updated = [...customSources, newSourceName.trim()];
+    const trimmed = newSourceName.trim();
+    if (!trimmed) return;
+    if (!customSources.includes(trimmed)) {
+      const updated = [...customSources, trimmed];
       setCustomSources(updated);
       localStorage.setItem("customSources", JSON.stringify(updated));
-      setFormData({ ...formData, source: newSourceName.trim() });
-      setNewSourceName("");
     }
+    setFormData({ ...formData, source: trimmed });
+    setNewSourceName("");
+    const newErrors = new Set(validationErrors);
+    newErrors.delete("source");
+    setValidationErrors(newErrors);
   };
 
   const handleSubmit = () => {
@@ -390,38 +432,50 @@ export default function DocumentWizard({
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Deadline <span className="text-red-500">*</span>
-                </label>
-                <button
-                type="button"
-                className="text-sm text-gray-500 hover:text-black mb-2"
-                onClick={() => {
-                  setFormData({ ...formData, deadline: null });
-                  const newErrors = new Set(validationErrors);
-                  newErrors.delete("deadline");
-                  setValidationErrors(newErrors);
-                }}
-              >
-                — No deadline —
-              </button>
-                <input
-                  type="date"
-                  value={formData.deadline || ""}
-                  onChange={(e) => {
-                    setFormData({ ...formData, deadline: e.target.value });
-                    if (e.target.value && validationErrors.has("deadline")) {
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-semibold text-gray-900">
+                    Deadline <span className="text-red-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const isClearing = formData.deadline !== null;
+                      setFormData({ ...formData, deadline: isClearing ? null : "" });
                       const newErrors = new Set(validationErrors);
                       newErrors.delete("deadline");
                       setValidationErrors(newErrors);
-                    }
-                  }}
-                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                    validationErrors.has("deadline")
-                      ? "border-red-500 focus:ring-red-500"
-                      : "border-gray-300 focus:ring-primary"
-                  }`}
-                />
+                    }}
+                    className={`text-xs font-medium px-3 py-1 rounded-full border transition ${
+                      formData.deadline === null
+                        ? "bg-gray-200 text-gray-600 border-gray-300"
+                        : "bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200"
+                    }`}
+                  >
+                    {formData.deadline === null ? "Set deadline" : "No deadline"}
+                  </button>
+                </div>
+                {formData.deadline !== null && (
+                  <input
+                    type="date"
+                    value={formData.deadline || ""}
+                    onChange={(e) => {
+                      setFormData({ ...formData, deadline: e.target.value });
+                      if (e.target.value && validationErrors.has("deadline")) {
+                        const newErrors = new Set(validationErrors);
+                        newErrors.delete("deadline");
+                        setValidationErrors(newErrors);
+                      }
+                    }}
+                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
+                      validationErrors.has("deadline")
+                        ? "border-red-500 focus:ring-red-500"
+                        : "border-gray-300 focus:ring-primary"
+                    }`}
+                  />
+                )}
+                {formData.deadline === null && (
+                  <p className="text-sm text-gray-400 italic">This document has no deadline.</p>
+                )}
               </div>
 
               {/* File Upload Drop Zone */}
@@ -436,14 +490,18 @@ export default function DocumentWizard({
                   ref={fileInputRef}
                   type="file"
                   className="hidden"
-                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                  accept=".pdf,.doc,.docx,.docm,.dot,.dotx,.xls,.xlsx,.xlsm,.csv,.ppt,.pptx,.pptm,.pps,.ppsx,.odt,.ods,.odp,.rtf,.txt,.gdoc,.gsheet,.gslides"
                   multiple
                   onChange={(e) => {
                     const newFiles = Array.from(e.target.files ?? []);
+                    const rejected = newFiles.filter((f) => !isAllowedFileType(f));
+                    if (rejected.length > 0) {
+                      toast.error(`File type not allowed: ${rejected.map((f) => f.name).join(", ")}`);
+                    }
+                    const allowed = newFiles.filter((f) => isAllowedFileType(f));
                     setSelectedFiles((prev) => {
                       const existing = new Set(prev.map((f) => f.name + f.size));
-                      const toAdd = newFiles.filter((f) => !existing.has(f.name + f.size));
-                      return [...prev, ...toAdd];
+                      return [...prev, ...allowed.filter((f) => !existing.has(f.name + f.size))];
                     });
                     if (fileInputRef.current) fileInputRef.current.value = "";
                   }}
@@ -463,7 +521,7 @@ export default function DocumentWizard({
                     <p className="text-sm text-gray-600">
                       Drag and drop or{" "}
                       <span className="text-primary font-medium">click to upload</span>
-                      <span className="block text-xs text-gray-400 mt-1">You can select multiple files</span>
+                      <span className="block text-xs text-gray-400 mt-1">PDF, Word, Excel, PowerPoint, Google Docs/Sheets/Slides, CSV, TXT — max 15MB</span>
                     </p>
                   )}
                 </div>
