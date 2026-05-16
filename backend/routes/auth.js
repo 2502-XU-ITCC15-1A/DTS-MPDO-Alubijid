@@ -75,7 +75,7 @@ router.post("/send-otp", otpLimiter, async (req, res) => {
   }
 
   const sendTo = employee.personal_email;
-  const otp = String(crypto.randomInt(10000000, 99999999));
+  const otp = String(crypto.randomInt(100000, 999999));
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
   await supabaseAdmin.from("otp_tokens").delete().eq("email", sendTo);
