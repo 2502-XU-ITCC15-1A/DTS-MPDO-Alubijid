@@ -123,6 +123,7 @@ router.post("/send-otp", otpLimiter, async (req, res) => {
         user: emailUser,
         pass: emailPass,
       },
+      requireTLS: emailPort !== 465,
     });
     mailFrom = `"MPDO Document Tracking" <${emailUser}>`;
   }
@@ -147,16 +148,60 @@ router.post("/send-otp", otpLimiter, async (req, res) => {
       });
 
       console.log(`[OTP] Sent to ${sendTo}`);
-      res.json({ success: true });
+      return res.json({ success: true });
     } catch (mailErr) {
       console.error("[OTP] Email send failed:", mailErr.message);
-      res.status(500).json({ error: "Failed to send OTP email." });
+
+      if (
+        emailUser &&
+        emailPass &&
+        emailHost === "smtp.gmail.com" &&
+        emailPort === 465
+      ) {
+        console.warn("[OTP] Retrying Gmail SMTP on port 587 after 465 failure...");
+        const fallbackTransporter = nodemailer.createTransport({
+          host: emailHost,
+          port: 587,
+          secure: false,
+          auth: {
+            user: emailUser,
+            pass: emailPass,
+          },
+          requireTLS: true,
+        });
+
+        try {
+          await fallbackTransporter.sendMail({
+            from: mailFrom,
+            to: sendTo,
+            subject: "Your Password Reset OTP — MPDO DTS",
+            html: `
+              <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;">
+                <h2 style="color:#0069c0;margin-bottom:4px;">Password Reset</h2>
+                <p style="color:#374151;">Hi ${employee.name || "there"},</p>
+                <p style="color:#374151;">Use the OTP below to reset your MPDO DTS password. It expires in <strong>10 minutes</strong>.</p>
+                <div style="background:#f0f9ff;border:2px dashed #0069c0;border-radius:8px;padding:20px;text-align:center;margin:24px 0;">
+                  <span style="font-size:36px;font-weight:bold;letter-spacing:10px;color:#0069c0;">${otp}</span>
+                </div>
+                <p style="color:#6b7280;font-size:13px;">If you did not request this, ignore this email. Do not share this code with anyone.</p>
+              </div>
+            `,
+          });
+
+          console.log(`[OTP] Sent to ${sendTo} via fallback port 587`);
+          return res.json({ success: true });
+        } catch (fallbackErr) {
+          console.error("[OTP] Fallback SMTP send failed:", fallbackErr.message);
+        }
+      }
+
+      return res.status(500).json({ error: "Failed to send OTP email." });
     }
-  } else {
-    console.warn(`[OTP DEV] No email provider configured; returning OTP in response for ${sendTo}`);
-    console.log(`[OTP DEV] Code for ${sendTo}: ${otp}`);
-    res.json({ success: true, devOtp: otp });
   }
+
+  console.warn(`[OTP DEV] No email provider configured; returning OTP in response for ${sendTo}`);
+  console.log(`[OTP DEV] Code for ${sendTo}: ${otp}`);
+  res.json({ success: true, devOtp: otp });
 });
 
 // ── Verify OTP ────────────────────────────────────────────────────────────────
