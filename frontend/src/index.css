@@ -1,0 +1,77 @@
+/* =========================
+   TAILWIND
+========================= */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+/* =========================
+   IMPORTS
+========================= */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+/* =========================
+   DESIGN TOKENS
+========================= */
+:root {
+  --background: oklch(0.985 0.002 247);
+  --foreground: oklch(0.2 0.04 265);
+
+  --card: oklch(1 0 0);
+  --border: oklch(0.94 0.01 255);
+
+  --muted: oklch(0.98 0.002 247);
+  --muted-foreground: oklch(0.55 0.04 257);
+
+  --primary: oklch(0.72 0.14 184);
+  --primary-foreground: oklch(1 0 0);
+
+  --destructive: oklch(0.63 0.22 25.5);
+  --destructive-foreground: oklch(1 0 0);
+
+  --accent: #16a34a;
+
+  /* =========================
+     STATUS COLORS
+  ========================= */
+  --status-ongoing: #1187ee;
+  --status-completed: #00b97c;
+  --status-delayed: #f1393c;
+  --status-utilization: #f77f00;
+
+
+  --warning: oklch(0.75 0.18 70);
+  --info: var(--primary);
+  --success: var(--status-completed);
+
+  /* =========================
+     SIDEBAR
+  ========================= */
+  --sidebar: oklch(0.21 0.04 265);
+  --sidebar-foreground: oklch(1 0 0);
+
+  --font-sans:
+    "Segoe UI",
+    "Helvetica Neue",
+    Arial,
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+
+/* =========================
+   BASE
+========================= */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: 'Plus Jakarta Sans Variable', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+
+
