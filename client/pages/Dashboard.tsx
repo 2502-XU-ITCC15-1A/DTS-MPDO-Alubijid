@@ -40,6 +40,7 @@ import {
   approveDocument,
   reviseDocument,
   archiveDocument,
+  unarchiveDocument,
   updateEmployeeProfile,
   changeUserPassword,
   locations,
@@ -264,7 +265,7 @@ export default function Dashboard() {
   const { user, logout, refreshUserProfile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeTab, setActiveTab] = useState<"all" | "archived">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "archived" | "employees">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -464,10 +465,10 @@ export default function Dashboard() {
     return ALLOWED_EXTENSIONS.has(ext) || ALLOWED_MIMETYPES.has(file.type);
   }
 
-  const activeNotifications = notifications.filter(
+  const activeNotifications = notifications;
+  const unreadNotificationCount = notifications.filter(
     (n) => !readNotificationIds.includes(n.id),
-  );
-  const unreadNotificationCount = activeNotifications.length;
+  ).length;
 
   // Load employees and documents from Supabase on mount
   useEffect(() => {
@@ -1227,7 +1228,7 @@ export default function Dashboard() {
     // Filter by tab
     if (activeTab === "archived") {
       docs = docs.filter((d) => d.archived === true);
-    } else {
+    } else if (activeTab !== "employees") {
       docs = docs.filter((d) => !d.archived);
     }
 
@@ -1406,8 +1407,8 @@ export default function Dashboard() {
                           Important announcements
                         </p>
                         <p className="text-xs text-slate-500">
-                          {activeNotifications.length} unread notification
-                          {activeNotifications.length === 1 ? "" : "s"}
+                          {unreadNotificationCount} unread notification
+                          {unreadNotificationCount === 1 ? "" : "s"}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1424,6 +1425,17 @@ export default function Dashboard() {
                         >
                           Mark all as read
                         </button>
+                        {activeNotifications.length > 0 && (
+                          <button
+                            onClick={() => {
+                              setNotifications([]);
+                              setReadNotificationIds([]);
+                            }}
+                            className="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                          >
+                            Delete all
+                          </button>
+                        )}
                         <button
                           onClick={() => setShowNotificationPanel(false)}
                           className="text-slate-400 hover:text-slate-600"
@@ -1439,73 +1451,91 @@ export default function Dashboard() {
                           No new announcements. You're all caught up.
                         </div>
                       ) : (
-                        activeNotifications.map((note) => (
-                          <button
+                        activeNotifications.map((note) => {
+                          const isRead = readNotificationIds.includes(note.id);
+                          return (
+                          <div
                             key={note.id}
-                            onClick={() => {
-                              setReadNotificationIds((prev) =>
-                                Array.from(new Set([...prev, note.id])),
-                              );
-                              if (note.docId) {
-                                const doc = documents.find(
-                                  (d) => d.id === note.docId,
-                                );
-                                if (doc) setSelectedDoc(doc);
-                              }
-                              setShowNotificationPanel(false);
-                            }}
-                            className="w-full rounded-3xl border border-slate-200 bg-white p-4 text-left transition hover:border-slate-300 hover:shadow-sm"
+                            className={`w-full rounded-3xl bg-white p-4 text-left transition hover:shadow-sm relative ${
+                              isRead
+                                ? "border border-slate-200 hover:border-slate-300 opacity-70"
+                                : "border-2 border-slate-400 hover:border-slate-500"
+                            }`}
                           >
-                            <div className="flex items-center justify-between gap-2">
-                              <div>
-                                <p className="text-sm font-semibold text-slate-900">
-                                  {note.title}
-                                </p>
-                                <p className="mt-1 text-xs text-slate-500">
-                                  Unread
-                                </p>
-                              </div>
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                                  note.severity === "urgent"
-                                    ? "bg-red-100 text-red-700"
+                            {/* X dismiss button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setNotifications((prev) => prev.filter((n) => n.id !== note.id));
+                                setReadNotificationIds((prev) => prev.filter((id) => id !== note.id));
+                              }}
+                              className="absolute top-2 right-2 p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+                              title="Dismiss"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+
+                            {/* Clickable area */}
+                            <button
+                              className="w-full text-left"
+                              onClick={() => {
+                                if (!isRead) {
+                                  setReadNotificationIds((prev) =>
+                                    Array.from(new Set([...prev, note.id])),
+                                  );
+                                }
+                                if (note.docId) {
+                                  const doc = documents.find((d) => d.id === note.docId);
+                                  if (doc) setSelectedDoc(doc);
+                                  setShowNotificationPanel(false);
+                                }
+                              }}
+                            >
+                              <div className="flex items-center justify-between gap-2 pr-5">
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-900">
+                                    {note.title}
+                                  </p>
+                                  <p className="mt-1 text-xs text-slate-500">
+                                    {isRead ? "Read" : "Unread"}
+                                  </p>
+                                </div>
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold flex-shrink-0 ${
+                                    note.severity === "urgent"
+                                      ? "bg-red-100 text-red-700"
+                                      : note.severity === "warning"
+                                        ? "bg-amber-100 text-amber-700"
+                                        : "bg-sky-100 text-sky-700"
+                                  }`}
+                                >
+                                  {note.severity === "urgent"
+                                    ? "Urgent"
                                     : note.severity === "warning"
-                                      ? "bg-amber-100 text-amber-700"
-                                      : "bg-sky-100 text-sky-700"
-                                }`}
-                              >
-                                {note.severity === "urgent"
-                                  ? "Urgent"
-                                  : note.severity === "warning"
-                                    ? "Warning"
-                                    : "Info"}
-                              </span>
-                            </div>
-                            <p className="mt-3 text-sm leading-6 text-slate-600">
-                              {note.message}
-                            </p>
-                          </button>
-                        ))
+                                      ? "Warning"
+                                      : "Info"}
+                                </span>
+                              </div>
+                              <p className="mt-3 text-sm leading-6 text-slate-600">
+                                {note.message}
+                              </p>
+                            </button>
+                          </div>
+                        );})
                       )}
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Admin-only employee menu */}
-              {user?.role === "admin" && (
+              {/* Admin-only employee menu removed — now a tab */}
+              {user?.role === "admin" && false && (
                 <div className="relative">
                   <button
                     onClick={() => setShowEmployeeMenu(!showEmployeeMenu)}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition"
+                    className="hidden"
                     title="Employee Management"
-                  >
-                    <img
-                      src="/emp_manage_icon.svg"
-                      alt="Employee Management"
-                      className="w-5 h-5 text-gray-600"
-                    />
-                  </button>
+                  />
 
                   {showEmployeeMenu && (
                     <div className="fixed left-3 right-3 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden">
@@ -1768,6 +1798,7 @@ export default function Dashboard() {
                 </p>
                 <p className="text-xs text-gray-500 capitalize">{user?.role === "head_staff" ? "Head Staff" : user?.role}</p>
               </div>
+
             </div>
           </div>
         </div>
@@ -2024,9 +2055,21 @@ export default function Dashboard() {
                   <Archive className="w-4 h-4" />
                   Archived
                 </button>
+                {user?.role === "admin" && (
+                  <button
+                    onClick={() => setActiveTab("employees")}
+                    className={`pb-2 font-medium border-b-2 transition flex items-center gap-1.5 whitespace-nowrap text-sm sm:text-base ${
+                      activeTab === "employees"
+                        ? "border-primary text-primary"
+                        : "border-transparent text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    <User className="w-4 h-4" />
+                    Employees
+                  </button>
+                )}
               </div>
-              {/* Upload button - admin, head staff, and staff */}
-              {(
+              {activeTab !== "employees" && (
                 <Button
                   onClick={() => setShowUploadModal(true)}
                   className="bg-primary hover:bg-primary/90 text-white flex gap-2 w-full sm:w-auto justify-center"
@@ -2038,8 +2081,8 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Search and Filter */}
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            {/* Search and Filter — hidden on employees tab */}
+            <div className={`flex flex-col gap-2 sm:flex-row sm:flex-wrap ${activeTab === "employees" ? "hidden" : ""}`}>
               <div className="relative min-w-0 flex-1">
                 <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -2087,8 +2130,141 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* Employees Tab Panel */}
+          {activeTab === "employees" && user?.role === "admin" && (
+            <div className="p-4 sm:p-6">
+              {/* Header row */}
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">Employee Management</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">{employees.length} total members</p>
+                </div>
+                <Button
+                  onClick={() => setShowAddEmployeeModal(true)}
+                  className="bg-primary hover:bg-primary/90 text-white flex items-center gap-2 text-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Employee
+                </Button>
+              </div>
+
+              {/* Role filter tabs */}
+              <div className="flex gap-1 mb-4 bg-gray-100 p-1 rounded-lg w-fit">
+                {([
+                  { key: "all", label: "All", count: employees.length },
+                  { key: "admin", label: "Admin", count: employees.filter(e => e.role === "admin").length },
+                  { key: "head_staff", label: "Head Staff", count: employees.filter(e => e.role === "head_staff").length },
+                  { key: "staff", label: "Staff", count: employees.filter(e => e.role === "staff").length },
+                ] as { key: "all" | "admin" | "head_staff" | "staff"; label: string; count: number }[]).map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setEmployeeTab(tab.key)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1.5 ${
+                      employeeTab === tab.key
+                        ? "bg-white text-primary shadow-sm"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    {tab.label}
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                      employeeTab === tab.key ? "bg-primary/10 text-primary" : "bg-gray-200 text-gray-500"
+                    }`}>
+                      {tab.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Employee grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {employees
+                  .filter(e => employeeTab === "all" || e.role === employeeTab)
+                  .map((employee) => (
+                    <div
+                      key={employee.id}
+                      className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex items-center gap-3 hover:border-primary/30 hover:bg-primary/5 transition group"
+                    >
+                      {/* Avatar */}
+                      <button
+                        onClick={() => setSelectedEmployeeInfo(employee)}
+                        className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 hover:bg-primary/20 transition"
+                      >
+                        <span className="text-sm font-semibold text-primary">
+                          {(employee.name || employee.email).charAt(0).toUpperCase()}
+                        </span>
+                      </button>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{employee.name || "—"}</p>
+                        <p className="text-xs text-gray-400 truncate">{employee.email}</p>
+                        {employee.department && (
+                          <p className="text-xs text-gray-400 truncate">{employee.department}</p>
+                        )}
+                      </div>
+
+                      {/* Role select */}
+                      <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                        <select
+                          value={employee.role}
+                          onChange={async (e) => {
+                            const newRole = e.target.value as "admin" | "head_staff" | "staff";
+                            const prevRole = employee.role;
+                            setEmployees((prev) =>
+                              prev.map((emp) =>
+                                emp.id === employee.id ? { ...emp, role: newRole } : emp,
+                              ),
+                            );
+                            try {
+                              await updateEmployeeRole(employee.id, newRole);
+                            } catch (err) {
+                              console.error("Failed to update role:", err);
+                              toast.error("Failed to update role. Please try again.");
+                              setEmployees((prev) =>
+                                prev.map((emp) =>
+                                  emp.id === employee.id ? { ...emp, role: prevRole } : emp,
+                                ),
+                              );
+                            }
+                          }}
+                          className={`text-xs font-semibold px-2 py-1 rounded-full border focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer transition-all ${
+                            employee.role === "admin"
+                              ? "bg-purple-50 text-purple-700 border-purple-200"
+                              : employee.role === "head_staff"
+                              ? "bg-green-50 text-green-700 border-green-200"
+                              : "bg-blue-50 text-blue-700 border-blue-200"
+                          }`}
+                        >
+                          <option value="staff">Staff</option>
+                          <option value="head_staff">Head Staff</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                        <button
+                          onClick={() => {
+                            setEmployeeToDelete(employee);
+                            setShowEmployeeDeleteConfirm(true);
+                          }}
+                          className="w-6 h-6 rounded-md bg-red-50 border border-red-200 text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500 flex items-center justify-center transition"
+                          title="Remove employee"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+
+              {employees.filter(e => employeeTab === "all" || e.role === employeeTab).length === 0 && (
+                <div className="text-center py-12">
+                  <User className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-400 text-sm">No employees in this category.</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Document List */}
-          <div className="divide-y divide-gray-200">
+          <div className={activeTab === "employees" ? "hidden" : "divide-y divide-gray-200"}>
             {loading ? (
               <div className="p-12 text-center">
                 <p className="text-gray-500">Loading documents...</p>
@@ -2327,8 +2503,14 @@ export default function Dashboard() {
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-start gap-2">
+                    <div className="flex items-start gap-2 flex-wrap">
                       <h3 className="text-2xl font-bold truncate">{selectedDoc.title}</h3>
+                      {selectedDoc.archived && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/20 border border-white/40 text-white text-xs font-bold rounded-full uppercase tracking-wide self-center whitespace-nowrap">
+                          <Archive className="w-3 h-3" />
+                          Archived
+                        </span>
+                      )}
                     </div>
                   )}
                   <p className="text-white/80 text-sm mt-1">{selectedDoc.id}</p>
@@ -2820,25 +3002,27 @@ export default function Dashboard() {
                               <Download className="w-4 h-4" />
                             </Button>
                           </a>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                await deleteDocumentFile(file.id);
-                                const updated = await getDocuments();
-                                setDocuments(updated);
-                                const refreshed = updated.find(
-                                  (d) => d.id === selectedDoc.id,
-                                );
-                                if (refreshed) setSelectedDoc(refreshed);
-                              } catch (err: any) {
-                                console.error("Failed to delete file:", err);
-                              }
-                            }}
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
+                          {!selectedDoc.archived && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await deleteDocumentFile(file.id);
+                                  const updated = await getDocuments();
+                                  setDocuments(updated);
+                                  const refreshed = updated.find(
+                                    (d) => d.id === selectedDoc.id,
+                                  );
+                                  if (refreshed) setSelectedDoc(refreshed);
+                                } catch (err: any) {
+                                  console.error("Failed to delete file:", err);
+                                }
+                              }}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ))
@@ -2867,7 +3051,14 @@ export default function Dashboard() {
                   }}
                 />
 
-                {/* File Drop Zone */}
+                {/* File Drop Zone + Upload — hidden when archived */}
+                {selectedDoc.archived ? (
+                  <div className="mt-4 border-2 border-dashed border-gray-200 rounded-lg p-6 text-center bg-gray-50">
+                    <Archive className="w-6 h-6 text-gray-300 mx-auto mb-1" />
+                    <p className="text-xs text-gray-400">File uploads are disabled for archived documents.</p>
+                  </div>
+                ) : (
+                  <>
                 <div
                   className="mt-4 border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary transition cursor-pointer"
                   onClick={() => fileInputRef.current?.click()}
@@ -2930,6 +3121,8 @@ export default function Dashboard() {
                     {isUploading ? "Uploading..." : `Upload File${selectedFiles.length > 1 ? `s (${selectedFiles.length})` : ""}`}
                   </Button>
                 </div>
+                  </>
+                )}
                 {uploadError && (
                   <p className="text-sm text-red-500 mt-2">{uploadError}</p>
                 )}
@@ -3222,6 +3415,43 @@ export default function Dashboard() {
                   })}
                 </div>
               </div>
+
+              {/* Unarchive Button - admin and head staff */}
+              {(user?.role === "admin" || user?.role === "head_staff") && selectedDoc.archived && (
+                <div className="border-t pt-6">
+                  <Button
+                    onClick={async () => {
+                      if (!selectedDoc || isArchiving) return;
+                      setIsArchiving(true);
+                      try {
+                        await unarchiveDocument(selectedDoc.id);
+                        await addAuditLog(
+                          selectedDoc.id,
+                          "Document Unarchived",
+                          user?.name || "Admin",
+                          "Document restored from archive.",
+                        );
+                        const updated = await getDocuments();
+                        setDocuments(updated);
+                        const refreshed = updated.find((d) => d.id === selectedDoc.id);
+                        if (refreshed) setSelectedDoc(refreshed);
+                        setActiveTab("all");
+                        toast.success("Document restored from archive.");
+                      } catch (err) {
+                        console.error(err);
+                        toast.error("Failed to unarchive document.");
+                      } finally {
+                        setIsArchiving(false);
+                      }
+                    }}
+                    disabled={isArchiving}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
+                    <Archive className="w-4 h-4" />
+                    {isArchiving ? "Restoring..." : "Unarchive Document"}
+                  </Button>
+                </div>
+              )}
 
               {/* Archive Button - admin and head staff */}
               {(user?.role === "admin" || user?.role === "head_staff") && selectedDoc.status === "Completed" && !selectedDoc.archived && (

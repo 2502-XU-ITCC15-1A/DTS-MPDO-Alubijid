@@ -262,6 +262,14 @@ export async function archiveDocument(documentId: string, archivedDate?: Date) {
   return res.json();
 }
 
+export async function unarchiveDocument(documentId: string) {
+  const { error } = await supabase
+    .from("documents")
+    .update({ archived: false, archived_date: null })
+    .eq("id", documentId);
+  if (error) throw error;
+}
+
 export async function deleteDocumentFile(fileId: string) {
   const { error } = await supabase
     .from("document_files")
