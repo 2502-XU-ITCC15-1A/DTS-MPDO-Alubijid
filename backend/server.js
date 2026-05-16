@@ -1,4 +1,19 @@
 require("dotenv").config();
+
+// Validate required environment variables before anything else
+const REQUIRED_ENV = [
+  "SUPABASE_URL",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_REFRESH_TOKEN",
+];
+const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key]);
+if (missingEnv.length > 0) {
+  console.error("Missing required environment variables:", missingEnv.join(", "));
+  process.exit(1);
+}
+
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");

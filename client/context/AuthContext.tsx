@@ -27,12 +27,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Restore session on page load
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user?.email) {
-        await loadUserProfile(session.user.email);
-      }
-      setIsLoading(false);
-    });
+    supabase.auth.getSession()
+      .then(async ({ data: { session } }) => {
+        if (session?.user?.email) {
+          await loadUserProfile(session.user.email);
+        }
+      })
+      .catch((err) => console.error("Failed to restore session:", err))
+      .finally(() => setIsLoading(false));
 
     // Listen for login/logout events
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
