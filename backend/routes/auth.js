@@ -95,10 +95,11 @@ router.post("/send-otp", otpLimiter, async (req, res) => {
   if (emailUser && emailPass) {
     try {
       const nodemailer = require("nodemailer");
+      const port = parseInt(process.env.EMAIL_PORT || "465");
       const transporter = nodemailer.createTransport({
         host: process.env.EMAIL_HOST || "smtp.gmail.com",
-        port: parseInt(process.env.EMAIL_PORT || "587"),
-        secure: false,
+        port,
+        secure: port === 465,
         auth: { user: emailUser, pass: emailPass },
       });
 
