@@ -143,6 +143,7 @@ router.post("/send-otp", otpLimiter, async (req, res) => {
     res.json({ success: true });
   } catch (mailErr) {
     console.error("[OTP] Gmail API send failed:", mailErr.message);
+    console.error("[OTP] Full error:", JSON.stringify(mailErr?.response?.data || mailErr, null, 2));
     res.status(500).json({ error: "Failed to send OTP email." });
   }
 });
