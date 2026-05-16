@@ -74,7 +74,7 @@ router.post("/send-otp", otpLimiter, async (req, res) => {
     return res.json({ success: true });
   }
 
-  const sendTo = employee.personal_email;
+  const sendTo = employee.personal_email.toLowerCase().trim();
   const otp = String(crypto.randomInt(100000, 999999));
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
@@ -89,22 +89,48 @@ router.post("/send-otp", otpLimiter, async (req, res) => {
 
   if (insertErr) return res.status(500).json({ error: "Failed to generate OTP." });
 
+  const gmailUser = process.env.GMAIL_USER;
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
   const emailUser = process.env.EMAIL_USER;
   const emailPass = process.env.EMAIL_PASS;
+  const emailHost = process.env.EMAIL_HOST || "smtp.gmail.com";
+  const emailPort = parseInt(process.env.EMAIL_PORT || "587", 10);
 
-  if (emailUser && emailPass) {
+  const nodemailer = require("nodemailer");
+  let transporter;
+  let mailFrom;
+
+  if (gmailUser && clientId && clientSecret && refreshToken) {
+    transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        type: "OAuth2",
+        user: gmailUser,
+        clientId,
+        clientSecret,
+        refreshToken,
+      },
+    });
+    mailFrom = `"MPDO Document Tracking" <${gmailUser}>`;
+  } else if (emailUser && emailPass) {
+    transporter = nodemailer.createTransport({
+      host: emailHost,
+      port: emailPort,
+      secure: emailPort === 465,
+      auth: {
+        user: emailUser,
+        pass: emailPass,
+      },
+    });
+    mailFrom = `"MPDO Document Tracking" <${emailUser}>`;
+  }
+
+  if (transporter) {
     try {
-      const nodemailer = require("nodemailer");
-      const port = parseInt(process.env.EMAIL_PORT || "465");
-      const transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST || "smtp.gmail.com",
-        port,
-        secure: port === 465,
-        auth: { user: emailUser, pass: emailPass },
-      });
-
       await transporter.sendMail({
-        from: `"MPDO Document Tracking" <${emailUser}>`,
+        from: mailFrom,
         to: sendTo,
         subject: "Your Password Reset OTP — MPDO DTS",
         html: `
@@ -127,8 +153,9 @@ router.post("/send-otp", otpLimiter, async (req, res) => {
       res.status(500).json({ error: "Failed to send OTP email." });
     }
   } else {
+    console.warn(`[OTP DEV] No email provider configured; returning OTP in response for ${sendTo}`);
     console.log(`[OTP DEV] Code for ${sendTo}: ${otp}`);
-    res.json({ success: true });
+    res.json({ success: true, devOtp: otp });
   }
 });
 

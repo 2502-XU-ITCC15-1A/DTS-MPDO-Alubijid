@@ -4,14 +4,23 @@ require("dotenv").config();
 const REQUIRED_ENV = [
   "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
-  "GOOGLE_CLIENT_ID",
-  "GOOGLE_CLIENT_SECRET",
-  "GOOGLE_REFRESH_TOKEN",
 ];
 const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key]);
 if (missingEnv.length > 0) {
   console.error("Missing required environment variables:", missingEnv.join(", "));
   process.exit(1);
+}
+
+const hasGmailOauth =
+  process.env.GMAIL_USER &&
+  process.env.GOOGLE_CLIENT_ID &&
+  process.env.GOOGLE_CLIENT_SECRET &&
+  process.env.GOOGLE_REFRESH_TOKEN;
+const hasSmtp = process.env.EMAIL_USER && process.env.EMAIL_PASS;
+if (!hasGmailOauth && !hasSmtp) {
+  console.warn(
+    "Warning: no email provider configured. Forgot-password OTP requests will return dev OTP values instead of sending email."
+  );
 }
 
 const express = require("express");
