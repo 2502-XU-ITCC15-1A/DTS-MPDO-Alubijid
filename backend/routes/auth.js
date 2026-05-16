@@ -89,61 +89,51 @@ router.post("/send-otp", otpLimiter, async (req, res) => {
 
   if (insertErr) return res.status(500).json({ error: "Failed to generate OTP." });
 
-  const gmailUser = process.env.GMAIL_USER;
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+  const emailUser = process.env.EMAIL_USER;
+  const emailPass = process.env.EMAIL_PASS;
 
-  if (!gmailUser || !clientId || !clientSecret || !refreshToken) {
+  if (!emailUser || !emailPass) {
     console.log(`[OTP DEV] Code for ${sendTo}: ${otp}`);
     return res.json({ success: true, devOtp: otp });
   }
 
   try {
-    const { google } = require("googleapis");
+    const nodemailer = require("nodemailer");
 
-    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, "http://localhost:3001/oauth2callback");
-    oauth2Client.setCredentials({ refresh_token: refreshToken });
-
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-
-    const htmlBody = `
-      <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;">
-        <h2 style="color:#0069c0;margin-bottom:4px;">Password Reset</h2>
-        <p style="color:#374151;">Hi ${employee.name || "there"},</p>
-        <p style="color:#374151;">Use the OTP below to reset your MPDO DTS password. It expires in <strong>10 minutes</strong>.</p>
-        <div style="background:#f0f9ff;border:2px dashed #0069c0;border-radius:8px;padding:20px;text-align:center;margin:24px 0;">
-          <span style="font-size:36px;font-weight:bold;letter-spacing:10px;color:#0069c0;">${otp}</span>
-        </div>
-        <p style="color:#6b7280;font-size:13px;">If you did not request this, ignore this email. Do not share this code with anyone.</p>
-      </div>
-    `;
-
-    const messageParts = [
-      `From: "MPDO Document Tracking" <${gmailUser}>`,
-      `To: ${sendTo}`,
-      `Subject: Your Password Reset OTP — MPDO DTS`,
-      `MIME-Version: 1.0`,
-      `Content-Type: text/html; charset=utf-8`,
-      ``,
-      htmlBody,
-    ];
-    const rawMessage = Buffer.from(messageParts.join("\n"))
-      .toString("base64")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-
-    await gmail.users.messages.send({
-      userId: "me",
-      requestBody: { raw: rawMessage },
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false,
+      requireTLS: true,
+      auth: {
+        user: emailUser,
+        pass: emailPass.replace(/\s/g, ""),
+      },
     });
 
-    console.log(`[OTP] Sent to ${sendTo} via Gmail API`);
+    await transporter.sendMail({
+      from: `"MPDO Document Tracking" <${emailUser}>`,
+      to: sendTo,
+      subject: "Your Password Reset OTP — MPDO DTS",
+      html: `
+        <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;">
+          <h2 style="color:#0069c0;margin-bottom:4px;">Password Reset</h2>
+          <p style="color:#374151;">Hi ${employee.name || "there"},</p>
+          <p style="color:#374151;">Use the OTP below to reset your MPDO DTS password. It expires in <strong>10 minutes</strong>.</p>
+          <div style="background:#f0f9ff;border:2px dashed #0069c0;border-radius:8px;padding:20px;text-align:center;margin:24px 0;">
+            <span style="font-size:36px;font-weight:bold;letter-spacing:10px;color:#0069c0;">${otp}</span>
+          </div>
+          <p style="color:#6b7280;font-size:13px;">If you did not request this, ignore this email. Do not share this code with anyone.</p>
+        </div>
+      `,
+    });
+
+    console.log(`[OTP] Sent to ${sendTo}`);
     res.json({ success: true });
   } catch (mailErr) {
-    console.error("[OTP] Gmail API send failed:", mailErr.message);
-    console.error("[OTP] Full error:", JSON.stringify(mailErr?.response?.data || mailErr, null, 2));
+    console.error("[OTP] Email send failed:", mailErr.message);
+    console.error("[OTP] Error code:", mailErr.code);
+    console.error("[OTP] Response:", mailErr.response);
     res.status(500).json({ error: "Failed to send OTP email." });
   }
 });
