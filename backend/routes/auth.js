@@ -89,30 +89,19 @@ router.post("/send-otp", otpLimiter, async (req, res) => {
 
   if (insertErr) return res.status(500).json({ error: "Failed to generate OTP." });
 
-  const emailUser = process.env.EMAIL_USER;
-  const emailPass = process.env.EMAIL_PASS;
+  const sendgridKey = process.env.SENDGRID_API_KEY;
 
-  if (!emailUser || !emailPass) {
+  if (!sendgridKey) {
     console.log(`[OTP DEV] Code for ${sendTo}: ${otp}`);
     return res.json({ success: true, devOtp: otp });
   }
 
   try {
-    const nodemailer = require("nodemailer");
+    const sgMail = require("@sendgrid/mail");
+    sgMail.setApiKey(sendgridKey);
 
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      requireTLS: true,
-      auth: {
-        user: emailUser,
-        pass: emailPass.replace(/\s/g, ""),
-      },
-    });
-
-    await transporter.sendMail({
-      from: `"MPDO Document Tracking" <${emailUser}>`,
+    await sgMail.send({
+      from: { name: "MPDO Document Tracking", email: "dts.mpdoalubijid@gmail.com" },
       to: sendTo,
       subject: "Your Password Reset OTP — MPDO DTS",
       html: `
@@ -128,12 +117,10 @@ router.post("/send-otp", otpLimiter, async (req, res) => {
       `,
     });
 
-    console.log(`[OTP] Sent to ${sendTo}`);
+    console.log(`[OTP] Sent to ${sendTo} via SendGrid`);
     res.json({ success: true });
   } catch (mailErr) {
-    console.error("[OTP] Email send failed:", mailErr.message);
-    console.error("[OTP] Error code:", mailErr.code);
-    console.error("[OTP] Response:", mailErr.response);
+    console.error("[OTP] SendGrid error:", mailErr.response?.body || mailErr.message);
     res.status(500).json({ error: "Failed to send OTP email." });
   }
 });
