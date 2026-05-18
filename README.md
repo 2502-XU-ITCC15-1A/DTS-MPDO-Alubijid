@@ -18,7 +18,7 @@
 
 ## Project Overview
 
-DTS-MPDO-Alubijid is a web-based Document Tracking System built for the Municipal Planning and Development Office. It allows staff to submit, track, and manage official documents through a structured digital workflow, replacing manual paper-based processes.
+DTS-MPDO-Alubijid is a web-based Document Tracking System built for the Municipal Planning and Development Office. It allows staff to submit, track, and manage official documents through a structured digital workflow, replacing manual paper-based processes..
 
 Key features:
 - Document submission and status tracking
