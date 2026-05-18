@@ -1,5 +1,5 @@
 /** @import must precede all other statements */
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -12,53 +12,50 @@
    * A different format will require also updating the theme in tailwind.config.ts.
   */
   :root {
-    /* =========================
-        BACKGROUND & FOREGROUND
-      ========================= */
-    --background: oklch(0.985 0.002 247);
-    --foreground: oklch(0.2 0.04 265);
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
 
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.2 0.04 265);
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
 
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.2 0.04 265);
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: oklch(0.72 0.14 184);
-    --primary-foreground: oklch(1 0 0);
+    --primary: 206 100% 39%;
+    --primary-foreground: 210 40% 98%;
 
-    --secondary: oklch(0.3 0.1 164);
-    --secondary-foreground: oklch(0.98 0.1 210);
+    --secondary: 164 100% 35%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: oklch(0.98 0.002 247);
-    --muted-foreground: oklch(0.55 0.04 257);
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: oklch(0.5 0.1 206);
-    --accent-foreground: oklch(0.98 0.1 210);
+    --accent: 206 100% 50%;
+    --accent-foreground: 210 40% 98%;
 
-    --destructive: oklch(0.63 0.22 25.5);
-    --destructive-foreground: oklch(1 0 0);
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: oklch(0.9 0.1 210);
-    --input: oklch(0.9 0.1 210);
-    --ring: oklch(0.5 0.1 206);
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 206 100% 39%;
 
     --radius: 0.5rem;
-    --accent: #16a34a;
-  
-    /* =========================
-        SIDEBAR
-      ========================= */
-    --sidebar: oklch(0.21 0.04 265);
-    --sidebar-foreground: oklch(1 0 0);
 
     --sidebar-background: 0 0% 98%;
+
     --sidebar-foreground: 240 5.3% 26.1%;
+
     --sidebar-primary: 240 5.9% 10%;
+
     --sidebar-primary-foreground: 0 0% 98%;
+
     --sidebar-accent: 240 4.8% 95.9%;
+
     --sidebar-accent-foreground: 240 5.9% 10%;
+
     --sidebar-border: 220 13% 91%;
+
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
@@ -106,13 +103,8 @@
     @apply border-border;
   }
 
-  html,
   body {
-    min-height: 100%;
     @apply bg-background text-foreground;
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
   }
 
   :where(p, span, li, h1, h2, h3, h4, h5, h6, a, button, label, td, th) {
@@ -127,73 +119,8 @@
   }
 }
 
-@layer components {
-  .card {
-    @apply bg-card border border-border rounded-lg p-4 shadow-sm;
-  }
-
-  .btn-primary-app {
-    @apply px-4 py-2 rounded-md font-semibold;
-    background-color: var(--primary);
-    color: var(--primary-foreground);
-  }
-
-  .input {
-    @apply w-full border border-border rounded-lg px-3 py-2 text-sm;
-    background-color: var(--muted);
-    color: var(--foreground);
-  }
-
-  .feature-card {
-    @apply glass p-8 rounded-3xl bg-slate-50/50 transition-all duration-300 hover:-translate-y-1;
-  }
-
-  .icon-box {
-    @apply w-12 h-12 rounded-xl flex items-center justify-center mb-6 transition-all;
-
-    color: var(--accent);
-    background-color: color-mix(in oklab, var(--accent) 10%, transparent);
-  }
-
-  .icon-box:hover {
-    background-color: var(--accent);
-    color: white;
-  }
-
-  .btn-primary {
-    @apply px-8 py-4 rounded-lg font-bold transition-all flex items-center justify-center gap-2 shadow-xl;
-
-    background-color: var(--accent);
-    color: white;
-  }
-
-  .btn-primary:hover {
-    background-color: color-mix(in oklab, var(--accent) 90%, black);
-  }
-
-  .btn-secondary {
-    @apply px-8 py-4 bg-white border border-slate-200 rounded-lg font-bold hover:bg-slate-50 transition-all text-slate-700 shadow-sm;
-  }
-
-  .input-field {
-    @apply w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm text-slate-900 transition-colors;
-  }
-
-  .input-field:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
-}
-
-@layer utilities {
-  .glass {
-    @apply backdrop-blur-xl bg-white/70 border border-slate-200 shadow-xl;
-  }
-}
-
 @keyframes loading-bar {
   0%   { width: 0%; margin-left: 0%; }
   50%  { width: 60%; margin-left: 20%; }
   100% { width: 0%; margin-left: 100%; }
 }
-

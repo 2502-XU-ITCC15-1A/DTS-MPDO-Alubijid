@@ -1,7 +1,5 @@
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
-import "./index.css";
-import "@fontsource-variable/plus-jakarta-sans";
 
 function App() {
   const [email, setEmail] = useState("");
@@ -14,7 +12,7 @@ function App() {
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      fontFamily: "'Plus Jakarta Sans', sans-serif",
+      fontFamily: "system-ui, sans-serif",
       padding: "1rem",
     }}>
       <div style={{ width: "100%", maxWidth: "420px" }}>
