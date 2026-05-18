@@ -2346,7 +2346,7 @@ export default function Dashboard() {
                           <div>
                             <p className="text-xs text-gray-500">Deadline</p>
                             <p className="font-medium text-gray-900">
-                              {doc.deadline || "No deadline"}
+                              {doc.deadline ? doc.deadline : "No deadline"}
                             </p>
                           </div>
                         </div>
@@ -2628,7 +2628,7 @@ export default function Dashboard() {
                     <div className="mt-1">
                       <select
                         className="h-9 w-full truncate rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
-                        value={editForm.documentType || ""}
+                        value={["", "Communication Letter", "Letter Request", "Memorandum", "Program of Works", "Resolution", "Ordinance", "Travel Order", "Zoning Certification and Locational Clearance", "Others"].includes(editForm.documentType) ? editForm.documentType : "Others"}
                         onChange={(e) =>
                           setEditForm({
                             ...editForm,
@@ -2663,24 +2663,18 @@ export default function Dashboard() {
                           <input
                             type="text"
                             value={newDocumentTypeName}
-                            onChange={(e) =>
-                              setNewDocumentTypeName(e.target.value)
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                handleAddCustomDocumentType();
-                              }
-                            }}
+                            onChange={(e) => setNewDocumentTypeName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleAddCustomDocumentType(); }}
                             placeholder="Enter new document type"
                             className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
                           />
-                          <button
-                            onClick={handleAddCustomDocumentType}
-                            className="p-1 bg-primary hover:bg-primary/90 text-white rounded transition"
-                            title="Confirm"
-                          >
-                            ✓
-                          </button>
+                          <button onClick={handleAddCustomDocumentType} className="p-1 bg-primary hover:bg-primary/90 text-white rounded transition" title="Confirm">✓</button>
+                        </div>
+                      )}
+                      {!["", "Others", "Communication Letter", "Letter Request", "Memorandum", "Program of Works", "Resolution", "Ordinance", "Travel Order", "Zoning Certification and Locational Clearance"].includes(editForm.documentType) && (
+                        <div className="mt-1 flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded text-sm">
+                          <span className="flex-1 font-medium text-blue-800">{editForm.documentType}</span>
+                          <button onClick={() => setEditForm({ ...editForm, documentType: "Others" })} className="text-xs text-blue-600 hover:underline">Change</button>
                         </div>
                       )}
                     </div>
@@ -2698,7 +2692,7 @@ export default function Dashboard() {
                     <div className="mt-1">
                       <select
                         className="h-9 w-full truncate rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-900"
-                        value={editForm.source || ""}
+                        value={["", "Others", ...locations].includes(editForm.source) ? editForm.source : "Others"}
                         onChange={(e) =>
                           setEditForm({ ...editForm, source: e.target.value })
                         }
@@ -2708,12 +2702,7 @@ export default function Dashboard() {
                             {loc}
                           </option>
                         ))}
-                        {/* {customSources.map((src) => (
-                          <option key={src} value={src}>
-                            {src}
-                          </option>
-                        ))} */}
-                        {/* <option value="Others">Others</option> */}
+                        <option value="Others">Others</option>
                       </select>
                       {editForm.source === "Others" && (
                         <div className="mt-2 flex gap-2">
@@ -2721,11 +2710,7 @@ export default function Dashboard() {
                             type="text"
                             value={newSourceName}
                             onChange={(e) => setNewSourceName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                handleAddCustomSource();
-                              }
-                            }}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleAddCustomSource(); }}
                             placeholder="Enter new source"
                             className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
                           />
@@ -2736,6 +2721,12 @@ export default function Dashboard() {
                           >
                             ✓
                           </button>
+                        </div>
+                      )}
+                      {!["", "Others", ...locations].includes(editForm.source) && (
+                        <div className="mt-1 flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded text-sm">
+                          <span className="flex-1 font-medium text-blue-800">{editForm.source}</span>
+                          <button onClick={() => setEditForm({ ...editForm, source: "Others" })} className="text-xs text-blue-600 hover:underline">Change</button>
                         </div>
                       )}
                     </div>
@@ -2811,7 +2802,7 @@ export default function Dashboard() {
                     />
                   ) : (
                     <p className="text-lg font-medium text-gray-900 mt-1">
-                      {selectedDoc.deadline}
+                      {selectedDoc.deadline || "No deadline"}
                     </p>
                   )}
                 </div>
