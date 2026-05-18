@@ -130,29 +130,6 @@ docker compose up --build
 
 ---
 
-## Staging Environment
-
-The staging environment is used for pre-production testing before merging to `main` or cutting a release.
-
-| | |
-|---|---|
-| **URL** | *(to be configured — update once deployed)* |
-| **Branch** | `staging` |
-| **Auth** | Google OAuth (use your MPDO Google account) |
-| **Database** | Staging Supabase project (separate from production) |
-
-> **Note:** The staging environment is reset periodically. Do not store critical data there.
-
-### Accessing the Staging Build
-
-1. Navigate to the staging URL above.
-2. Sign in using your MPDO Google account via the "Sign in with Google" button.
-3. You will be redirected to the dashboard upon successful authentication.
-
-For backend API staging access, the `VITE_API_URL` on the staging deployment points to the staging Express server.
-
----
-
 ## CI/CD Pipeline Overview
 
 The project uses a Docker-based build pipeline. Deployment is triggered manually or via branch push depending on the hosting provider (Netlify / self-hosted Docker host).
