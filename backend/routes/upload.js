@@ -11,6 +11,7 @@ const ALLOWED_EXTENSIONS = new Set([
   "odt", "ods", "odp",
   "txt", "rtf",
   "gdoc", "gsheet", "gslides",
+  "png", "jpg", "jpeg",
 ]);
 
 const ALLOWED_MIMETYPES = new Set([
@@ -32,6 +33,8 @@ const ALLOWED_MIMETYPES = new Set([
   "application/vnd.oasis.opendocument.presentation",
   "text/plain",
   "application/rtf",
+  "image/png",
+  "image/jpeg",
 ]);
 
 function isAllowedFile(fileName, mimeType) {
@@ -63,8 +66,8 @@ router.post("/upload", requireAuth, uploadLimiter, async (req, res) => {
     }
 
     const buffer = Buffer.from(fileBase64, "base64");
-    if (buffer.length > 5 * 1024 * 1024) {
-      return res.status(400).json({ error: "File too large. Maximum size is 5MB." });
+    if (buffer.length > 15 * 1024 * 1024) {
+      return res.status(400).json({ error: "File too large. Maximum size is 15MB." });
     }
     const folderId = await getOrCreateFolder(documentId);
 

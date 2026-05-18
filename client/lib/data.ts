@@ -214,7 +214,8 @@ export async function updateDocument(
   if (fields.assignedTo) mapped.assigned_to = fields.assignedTo;
   if (fields.source) mapped.source = fields.source;
   if (fields.destination !== undefined) mapped.destination = fields.destination;
-  if (fields.deadline) mapped.deadline = fields.deadline;
+  if (fields.deadline !== undefined) mapped.deadline = fields.deadline || null;
+  if (fields.documentType !== undefined) mapped.document_type = fields.documentType;
   if (fields.archived !== undefined) mapped.archived = fields.archived;
   if (fields.routingActions) {
     // Store routing actions as JSON array in the database
