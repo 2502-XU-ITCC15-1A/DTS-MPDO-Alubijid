@@ -43,7 +43,7 @@ export async function updateEmployeeRole(id: string, role: "admin" | "head_staff
 
 export async function deleteEmployee(id: string) {
   const response = await fetch(
-    `${API}/api/delete-employee/${encodeURIComponent(id)}`,
+    `${API}/api/user/delete-employee/${encodeURIComponent(id)}`,
     {
       method: "DELETE",
       headers: await getAuthHeaders(),
@@ -124,7 +124,7 @@ export async function getDocuments(): Promise<Document[]> {
         submittedDate: doc.submitted_date,
         timestamp: doc.timestamp,
         assignedTo: doc.assigned_to,
-        deadline: doc.deadline,
+        deadline: doc.deadline || null,
         source: doc.source,
         destination: doc.destination,
         routingSlip: doc.routing_slip,
@@ -175,7 +175,7 @@ export async function createDocument(
     submitted_date: now.split("T")[0],
     timestamp: new Date().toLocaleString(),
     assigned_to: doc.assignedTo,
-    deadline: doc.deadline,
+    deadline: doc.deadline || null,
     source: doc.source,
     destination: doc.destination ?? null,
     routing_slip: { actions: routingActions, remarks: routingRemarks },

@@ -1853,12 +1853,17 @@ export default function Dashboard() {
                 <Label htmlFor="profile-department" className="text-xs font-medium text-gray-600 flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5" /> Department
                 </Label>
-                <Input
+                <select
                   id="profile-department"
                   value={profileDepartment}
-                  onChange={(event) => setProfileDepartment(event.target.value)}
-                  className="h-9 rounded-lg text-sm border-gray-200 focus:border-primary"
-                />
+                  onChange={(e) => setProfileDepartment(e.target.value)}
+                  className="h-9 rounded-lg text-sm border border-gray-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary px-3 bg-white"
+                >
+                  <option value="">Select Department</option>
+                  {Object.values(designationOptionsByUnit).flat().map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
               </div>
               <div className="flex gap-2 pt-1">
                 <Button
@@ -2341,7 +2346,7 @@ export default function Dashboard() {
                           <div>
                             <p className="text-xs text-gray-500">Deadline</p>
                             <p className="font-medium text-gray-900">
-                              {doc.deadline}
+                              {doc.deadline || "No deadline"}
                             </p>
                           </div>
                         </div>
@@ -4224,7 +4229,7 @@ export default function Dashboard() {
                   submittedDate: new Date().toISOString().split("T")[0],
                   timestamp: new Date().toLocaleString(),
                   assignedTo: wizardData.assignedTo,
-                  deadline: wizardData.deadline,
+                  deadline: wizardData.deadline || null,
                   source: wizardData.source,
                   createdAt: new Date().toISOString(),
                   updatedAt: new Date().toISOString(),

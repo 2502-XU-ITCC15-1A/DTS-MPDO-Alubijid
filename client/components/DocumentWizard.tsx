@@ -172,26 +172,19 @@ export default function DocumentWizard({
   };
 
   const handleAddCustomDocumentType = () => {
-    if (
-      newDocumentTypeName.trim() &&
-      !customDocumentTypes.includes(newDocumentTypeName.trim())
-    ) {
-      const updated = [...customDocumentTypes, newDocumentTypeName.trim()];
-      setCustomDocumentTypes(updated);
-      localStorage.setItem("customDocumentTypes", JSON.stringify(updated));
-      setFormData({ ...formData, documentType: newDocumentTypeName.trim() });
+    const trimmed = newDocumentTypeName.trim();
+    if (trimmed) {
+      setFormData({ ...formData, documentType: trimmed });
       setNewDocumentTypeName("");
+      const newErrors = new Set(validationErrors);
+      newErrors.delete("documentType");
+      setValidationErrors(newErrors);
     }
   };
 
   const handleAddCustomSource = () => {
     const trimmed = newSourceName.trim();
     if (!trimmed) return;
-    if (!customSources.includes(trimmed)) {
-      const updated = [...customSources, trimmed];
-      setCustomSources(updated);
-      localStorage.setItem("customSources", JSON.stringify(updated));
-    }
     setFormData({ ...formData, source: trimmed });
     setNewSourceName("");
     const newErrors = new Set(validationErrors);
@@ -212,7 +205,9 @@ export default function DocumentWizard({
   const isStep1Valid =
     formData.title &&
     formData.documentType &&
-    formData.source;
+    formData.documentType !== "Others" &&
+    formData.source &&
+    formData.source !== "Others";
   const isStep2Valid = formData.assignedTo;
   const isStep3Valid = isStep1Valid && isStep2Valid;
 
@@ -333,21 +328,19 @@ export default function DocumentWizard({
                       type="text"
                       value={newDocumentTypeName}
                       onChange={(e) => setNewDocumentTypeName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          handleAddCustomDocumentType();
-                        }
-                      }}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleAddCustomDocumentType(); }}
                       placeholder="Enter new document type"
                       className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                     />
-                    <button
-                      onClick={handleAddCustomDocumentType}
-                      className="p-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition"
-                      title="Confirm"
-                    >
+                    <button onClick={handleAddCustomDocumentType} className="p-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition" title="Confirm">
                       <CheckCircle className="w-5 h-5" />
                     </button>
+                  </div>
+                )}
+                {!["", "Others", ...defaultDocumentTypes].includes(formData.documentType) && (
+                  <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                    <span className="flex-1 text-sm font-medium text-blue-800">{formData.documentType}</span>
+                    <button onClick={() => setFormData({ ...formData, documentType: "Others" })} className="text-xs text-blue-600 hover:underline">Change</button>
                   </div>
                 )}
               </div>
@@ -378,12 +371,7 @@ export default function DocumentWizard({
                       {loc}
                     </option>
                   ))}
-                  {/* {customSources.map((src) => (
-                    <option key={src} value={src}>
-                      {src}
-                    </option>
-                  ))} */}
-                  {/* <option value="Others">Others</option> */}
+                  <option value="Others">Others</option>
                 </select>
                 {formData.source === "Others" && (
                   <div className="mt-3 flex gap-2">
@@ -391,21 +379,19 @@ export default function DocumentWizard({
                       type="text"
                       value={newSourceName}
                       onChange={(e) => setNewSourceName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          handleAddCustomSource();
-                        }
-                      }}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleAddCustomSource(); }}
                       placeholder="Enter new source"
                       className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                     />
-                    <button
-                      onClick={handleAddCustomSource}
-                      className="p-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition"
-                      title="Confirm"
-                    >
+                    <button onClick={handleAddCustomSource} className="p-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition" title="Confirm">
                       <CheckCircle className="w-5 h-5" />
                     </button>
+                  </div>
+                )}
+                {!["", "Others", ...locations].includes(formData.source) && (
+                  <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                    <span className="flex-1 text-sm font-medium text-blue-800">{formData.source}</span>
+                    <button onClick={() => setFormData({ ...formData, source: "Others" })} className="text-xs text-blue-600 hover:underline">Change</button>
                   </div>
                 )}
               </div>
