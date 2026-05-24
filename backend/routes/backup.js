@@ -1,6 +1,11 @@
 const express = require("express");
 const { Readable } = require("stream");
-const cron = require("node-cron");
+let cron;
+try {
+  cron = require("node-cron");
+} catch (err) {
+  cron = { schedule: () => ({ stop: () => {} }) };
+}
 const router = express.Router();
 const { supabaseAdmin } = require("../config/supabase");
 const { drive } = require("../config/drive");

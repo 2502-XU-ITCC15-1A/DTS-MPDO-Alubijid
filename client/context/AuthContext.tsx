@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
+import { login as authLogin, logout as authLogout, loadUserProfile as authLoadUserProfile } from "@/lib/auth";
 
 export interface User {
   id: string;
@@ -29,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Restore session on page load
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user?.email) {
-        await loadUserProfile(session.user.email);
+        await authLoadUserProfile(supabase, session.user.email, setUser);
       }
       setIsLoading(false);
     });
@@ -44,38 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  async function loadUserProfile(email: string): Promise<boolean> {
-    const { data, error } = await supabase
-      .from("employees")
-      .select("*")
-      .eq("email", email)
-      .single();
-
-    if (error || !data) {
-      console.error("Employee profile not found for:", email, error);
-      return false;
-    }
-
-    setUser({
-      id: data.id,
-      name: data.name,
-      email: data.email,
-      role: data.role,
-      department: data.department,
-      personal_email: data.personal_email ?? undefined,
-    });
-    return true;
-  }
-
   const login = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message);
-
-    const found = await loadUserProfile(email);
-    if (!found) {
-      await supabase.auth.signOut();
-      throw new Error("Your account is not registered as an MPDO employee. Contact the administrator.");
-    }
+    await authLogin(supabase, email, password, async (emailToLoad) =>
+      await authLoadUserProfile(supabase, emailToLoad, setUser),
+    );
   };
 
   const refreshUserProfile = async () => {
@@ -89,14 +62,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (session?.user?.email) {
-      await loadUserProfile(session.user.email);
+      await authLoadUserProfile(supabase, session.user.email, setUser);
     }
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    window.location.replace("/login");
+    await authLogout(supabase, setUser);
   };
 
   return (
