@@ -2,7 +2,7 @@ const express = require("express");
 const crypto = require("crypto");
 const router = express.Router();
 const { supabaseAdmin } = require("../config/supabase");
-const { authLimiter, otpLimiter } = require("../config/limiters");
+const { authLimiter, otpLimiter, resetLimiter } = require("../config/limiters");
 
 // ── Check if email is registered (public — signup flow) ──────────────────────
 router.post("/check-email", authLimiter, async (req, res) => {
@@ -41,7 +41,7 @@ router.post("/create-account", authLimiter, async (req, res) => {
     return res.status(403).json({ error: "Email not registered by admin" });
   }
 
-  const { error } = await supabaseAdmin.auth.admin.createUser({
+  const { data: newUser, error } = await supabaseAdmin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
@@ -161,7 +161,7 @@ router.post("/verify-otp", otpLimiter, async (req, res) => {
 });
 
 // ── Reset password using verified reset token ─────────────────────────────────
-router.post("/reset-password", otpLimiter, async (req, res) => {
+router.post("/reset-password", resetLimiter, async (req, res) => {
   const { resetToken, password, email } = req.body;
   if (!resetToken || !password || !email) {
     return res.status(400).json({ error: "Token, email and password required" });
@@ -185,14 +185,26 @@ router.post("/reset-password", otpLimiter, async (req, res) => {
     return res.status(400).json({ error: "Reset token has expired. Please start over." });
   }
 
-  const { data: empRow, error: empErr } = await supabaseAdmin
-    .from("employees")
-    .select("uuid")
-    .eq("email", token.email)
-    .single();
-  if (empErr || !empRow) return res.status(404).json({ error: "Auth account not found." });
+  // token.email is the personal email — find the matching work email
+  const { data: allEmps } = await supabaseAdmin.from("employees").select("email, personal_email");
+  const normalizedSearch = token.email.toLowerCase().trim();
+  const empRow = allEmps?.find(e => e.personal_email?.toLowerCase().trim() === normalizedSearch);
+  if (!empRow) return res.status(404).json({ error: "Auth account not found." });
 
-  const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(empRow.uuid, { password });
+  // find the Supabase Auth user by work email
+  let authUserId = null;
+  let page = 1;
+  while (!authUserId) {
+    const { data: { users, nextPage }, error: listErr } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000, page });
+    if (listErr) return res.status(500).json({ error: "Failed to look up user." });
+    const found = users.find((u) => u.email === empRow.email);
+    if (found) { authUserId = found.id; break; }
+    if (!nextPage) break;
+    page++;
+  }
+  if (!authUserId) return res.status(404).json({ error: "Auth account not found." });
+
+  const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(authUserId, { password });
   if (updateErr) return res.status(500).json({ error: "Failed to reset password." });
 
   await supabaseAdmin.from("otp_tokens").update({ used: true }).eq("id", token.id);

@@ -16,6 +16,14 @@ const otpLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: "Too many reset attempts. Please wait 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const uploadLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 30,
@@ -24,4 +32,4 @@ const uploadLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-module.exports = { authLimiter, otpLimiter, uploadLimiter };
+module.exports = { authLimiter, otpLimiter, resetLimiter, uploadLimiter };
