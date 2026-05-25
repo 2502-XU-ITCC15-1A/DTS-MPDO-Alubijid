@@ -185,13 +185,14 @@ router.post("/reset-password", otpLimiter, async (req, res) => {
     return res.status(400).json({ error: "Reset token has expired. Please start over." });
   }
 
-  const { data: { users }, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
-  if (listErr) return res.status(500).json({ error: "Failed to look up user." });
+  const { data: empRow, error: empErr } = await supabaseAdmin
+    .from("employees")
+    .select("uuid")
+    .eq("email", token.email)
+    .single();
+  if (empErr || !empRow) return res.status(404).json({ error: "Auth account not found." });
 
-  const authUser = users.find((u) => u.email === token.email);
-  if (!authUser) return res.status(404).json({ error: "Auth account not found." });
-
-  const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(authUser.id, { password });
+  const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(empRow.uuid, { password });
   if (updateErr) return res.status(500).json({ error: "Failed to reset password." });
 
   await supabaseAdmin.from("otp_tokens").update({ used: true }).eq("id", token.id);
