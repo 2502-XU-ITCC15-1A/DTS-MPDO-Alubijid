@@ -4186,6 +4186,8 @@ export default function Dashboard() {
       {showUploadModal && (
         <DocumentWizard
           isSubmitting={isSubmitting}
+          userRole={user.role}
+          userEmail={user.email}
           onClose={() => {
             setShowUploadModal(false);
             setUploadFormData({

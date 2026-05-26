@@ -16,6 +16,8 @@ import { RoutingAction } from "@shared/api";
 interface DocumentWizardProps {
   onClose: () => void;
   isSubmitting?: boolean;
+  userRole?: "admin" | "head_staff" | "staff";
+  userEmail?: string;
   onSubmit: (formData: {
     title: string;
     documentType: string;
@@ -44,13 +46,16 @@ export default function DocumentWizard({
   onClose,
   onSubmit,
   isSubmitting = false,
+  userRole,
+  userEmail,
 }: DocumentWizardProps) {
+  const isStaff = userRole === "staff";
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     title: "",
     documentType: "",
     source: "",
-    assignedTo: "",
+    assignedTo: userRole === "staff" && userEmail ? userEmail : "",
     deadline: "" as string | null,
     documentDirection: "Incoming" as "Incoming" | "Outgoing",
   });
@@ -150,7 +155,7 @@ export default function DocumentWizard({
     }
 
     if (currentStep === 2) {
-      if (!formData.assignedTo) errors.add("assignedTo");
+      if (!isStaff && !formData.assignedTo) errors.add("assignedTo");
     }
 
     if (errors.size > 0) {
@@ -557,36 +562,38 @@ export default function DocumentWizard({
                 Assignment & Routing
               </p>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Assign To Staff Member <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formData.assignedTo}
-                  onChange={(e) => {
-                    setFormData({ ...formData, assignedTo: e.target.value });
-                    if (e.target.value && validationErrors.has("assignedTo")) {
-                      const newErrors = new Set(validationErrors);
-                      newErrors.delete("assignedTo");
-                      setValidationErrors(newErrors);
-                    }
-                  }}
-                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 bg-white ${
-                    validationErrors.has("assignedTo")
-                      ? "border-red-500 focus:ring-red-500"
-                      : "border-gray-300 focus:ring-primary"
-                  }`}
-                >
-                  <option value="">Select Staff Member</option>
-                  {employees
-                    .filter((e) => e.role === "staff")
-                    .map((employee) => (
-                      <option key={employee.id} value={employee.email}>
-                        {employee.name} | {employee.department}
-                      </option>
-                    ))}
-                </select>
-              </div>
+              {!isStaff && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Assign To Staff Member <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.assignedTo}
+                    onChange={(e) => {
+                      setFormData({ ...formData, assignedTo: e.target.value });
+                      if (e.target.value && validationErrors.has("assignedTo")) {
+                        const newErrors = new Set(validationErrors);
+                        newErrors.delete("assignedTo");
+                        setValidationErrors(newErrors);
+                      }
+                    }}
+                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 bg-white ${
+                      validationErrors.has("assignedTo")
+                        ? "border-red-500 focus:ring-red-500"
+                        : "border-gray-300 focus:ring-primary"
+                    }`}
+                  >
+                    <option value="">Select Staff Member</option>
+                    {employees
+                      .filter((e) => e.role === "staff")
+                      .map((employee) => (
+                        <option key={employee.id} value={employee.email}>
+                          {employee.name} | {employee.department}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-3">
