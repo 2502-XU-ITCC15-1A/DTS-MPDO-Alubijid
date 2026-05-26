@@ -204,4 +204,26 @@ router.post("/archive-document", requireAuth, requireAdminOrHead, async (req, re
   }
 });
 
+// ── Unarchive a document (admin or head staff only) ────────────────────────────
+router.post("/unarchive-document", requireAuth, requireAdminOrHead, async (req, res) => {
+  try {
+    const { documentId } = req.body;
+    if (!documentId) return res.status(400).json({ error: "documentId required" });
+
+    const { error: dbErr } = await supabaseAdmin
+      .from("documents")
+      .update({ archived: false, updated_at: new Date().toISOString() })
+      .eq("id", documentId);
+    if (dbErr) {
+      console.error("Unarchive DB error:", dbErr.message);
+      return res.status(500).json({ error: dbErr.message });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Unarchive error:", err.message);
+    res.status(500).json({ error: "Failed to unarchive document." });
+  }
+});
+
 module.exports = router;

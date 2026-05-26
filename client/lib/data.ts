@@ -264,11 +264,16 @@ export async function archiveDocument(documentId: string, archivedDate?: Date) {
 }
 
 export async function unarchiveDocument(documentId: string) {
-  const { error } = await supabase
-    .from("documents")
-    .update({ archived: false, archived_date: null })
-    .eq("id", documentId);
-  if (error) throw error;
+  const res = await fetch("/api/unarchive-document", {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({ documentId }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error || "Failed to unarchive document.");
+  }
+  return res.json();
 }
 
 export async function deleteDocumentFile(fileId: string) {
