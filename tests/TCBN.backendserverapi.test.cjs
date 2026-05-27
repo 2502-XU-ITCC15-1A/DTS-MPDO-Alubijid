@@ -55,7 +55,7 @@ vi.mock('googleapis', () => ({
 }));
 
 const { createClient } = require('@supabase/supabase-js');
-const supabaseMock = createClient();
+const supabaseMock = createClient("http://localhost", "public-anon-key");
 const app = require('../backend/server');
 
 describe('Backend server API', () => {
